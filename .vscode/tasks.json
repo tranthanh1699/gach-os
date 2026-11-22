@@ -1,10 +1,10 @@
 {
     "version": "2.0.0",
     "tasks": [
-        { "label": "esp32-os: build", "type": "shell", "command": "./build.sh build", "group": { "kind": "build", "isDefault": true }, "problemMatcher": ["$gcc"] },
-        { "label": "esp32-os: layer check", "type": "shell", "command": "./build.sh check", "problemMatcher": [] },
-        { "label": "esp32-os: flash + monitor", "type": "shell", "command": "./build.sh -p ${input:port} flash-monitor", "problemMatcher": [] },
-        { "label": "esp32-os: menuconfig", "type": "shell", "command": "./build.sh menuconfig", "problemMatcher": [] }
+        { "label": "gach-os: build", "type": "shell", "command": "./build.sh build", "group": { "kind": "build", "isDefault": true }, "problemMatcher": ["$gcc"] },
+        { "label": "gach-os: layer check", "type": "shell", "command": "./build.sh check", "problemMatcher": [] },
+        { "label": "gach-os: flash + monitor", "type": "shell", "command": "./build.sh -p ${input:port} flash-monitor", "problemMatcher": [] },
+        { "label": "gach-os: menuconfig", "type": "shell", "command": "./build.sh menuconfig", "problemMatcher": [] }
     ],
     "inputs": [
         { "id": "port", "type": "promptString", "description": "Serial port", "default": "/dev/ttyUSB0" }

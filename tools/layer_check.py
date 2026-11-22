@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kiểm tra tuân thủ kiến trúc phân tầng của esp32-os.
+"""Kiểm tra tuân thủ kiến trúc phân tầng của gach-os.
 
 Đọc ma trận từ tools/layer_matrix.json rồi quét mọi file C/C++ trong src/ và platform/:
   1. Mỗi #include phải trỏ tới tầng được phép (layer matrix).

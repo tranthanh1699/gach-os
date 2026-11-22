@@ -26,4 +26,4 @@ set(EXTRA_COMPONENT_DIRS
 set(OS_STRICT_FLAGS -Wall -Wextra -Werror -Wshadow -Wnon-virtual-dtor -Wno-missing-field-initializers)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(esp32_os)
+project(gach_os)

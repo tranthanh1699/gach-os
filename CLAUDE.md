@@ -1,4 +1,4 @@
-# CLAUDE.md — esp32-os
+# CLAUDE.md — gach-os
 
 Hệ điều hành giao diện kiểu điện thoại (Nokia S60 / Android) cho MCU có màn hình. C++17 + ESP-IDF + LVGL 9, phân tầng nghiêm ngặt để port sang chip/màn hình khác chỉ bằng cách viết lại `platform/<chip>`. Board hiện tại: **ESP32-2432S028R** (ILI9341 320x240 + XPT2046).
 

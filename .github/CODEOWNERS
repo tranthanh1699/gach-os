@@ -1,4 +1,2 @@
-# Global Code Owner for esp32-os
-# Require @pempem98 review for all pull requests into protected branches
-
-* @pempem98
+# Code owner của gach-os: mọi PR vào nhánh được bảo vệ cần @tranthanh1699 review.
+* @tranthanh1699

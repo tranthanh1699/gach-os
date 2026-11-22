@@ -1,4 +1,4 @@
-# esp32-os C++ style – xem .agent/rules/coding_standards.md
+# gach-os C++ style – xem .agent/rules/coding_standards.md
 BasedOnStyle: LLVM
 Language: Cpp
 Standard: c++17

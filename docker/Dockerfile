@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1.4
 # ==============================================================================
-# Môi trường build tái lập cho esp32-os: ESP-IDF chính thức + ccache.
-#   docker build -t esp32-os-idf:latest -f docker/Dockerfile docker
+# Môi trường build tái lập cho gach-os: ESP-IDF chính thức + ccache.
+#   docker build -t gach-os-idf:latest -f docker/Dockerfile docker
 # (./build.sh tự build image khi cần)
 # ==============================================================================
 ARG IDF_VERSION=v5.4.1
 FROM espressif/idf:${IDF_VERSION}
 
-LABEL org.opencontainers.image.title="esp32-os-idf" \
-      org.opencontainers.image.description="ESP-IDF build environment for esp32-os"
+LABEL org.opencontainers.image.title="gach-os-idf" \
+      org.opencontainers.image.description="ESP-IDF build environment for gach-os"
 
 ENV DEBIAN_FRONTEND=noninteractive \
     IDF_CCACHE_ENABLE=1 \

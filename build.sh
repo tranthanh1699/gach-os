@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# esp32-os – điểm vào build duy nhất.
+# gach-os – điểm vào build duy nhất.
 #
 #   ./build.sh [options] [action]
 #
@@ -19,7 +19,7 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DOCKER_IMAGE="${DOCKER_IMAGE:-esp32-os-idf:latest}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-gach-os-idf:latest}"
 BOARD="${BOARD:-esp32_2432s028}"
 PORT="${PORT:-}"
 MODE="auto"

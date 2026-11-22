@@ -1,4 +1,4 @@
-name: esp32-os CI
+name: gach-os CI
 
 on:
   push:

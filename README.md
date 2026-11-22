@@ -1,4 +1,4 @@
-# esp32-os
+# gach-os
 
 **Hệ điều hành giao diện kiểu điện thoại cho vi điều khiển có màn hình.**
 
@@ -33,7 +33,7 @@ Nền tảng: **ESP-IDF** · **LVGL 9** · **C++17** · build bằng **Docker** 
 
 Hướng dẫn đầy đủ (cài đặt, flash, xử lý sự cố): **[docs/build_and_flash.md](docs/build_and_flash.md)**.
 
-Docker: user cần thuộc group `docker` (`sudo usermod -aG docker $USER`, đăng nhập lại). Image `esp32-os-idf` (dựa trên `espressif/idf:v5.4.1`) được build tự động lần đầu.
+Docker: user cần thuộc group `docker` (`sudo usermod -aG docker $USER`, đăng nhập lại). Image `gach-os-idf` (dựa trên `espressif/idf:v5.4.1`) được build tự động lần đầu.
 
 ## Cấu trúc
 

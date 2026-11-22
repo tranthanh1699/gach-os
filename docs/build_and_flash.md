@@ -1,6 +1,6 @@
 # Build & Flash
 
-Hướng dẫn build firmware esp32-os và nạp xuống board **ESP32-2432S028R (CYD)**. Mọi thao tác đi qua `./build.sh` ở gốc repo.
+Hướng dẫn build firmware gach-os và nạp xuống board **ESP32-2432S028R (CYD)**. Mọi thao tác đi qua `./build.sh` ở gốc repo.
 
 ## 1. Chuẩn bị (làm 1 lần)
 
@@ -16,7 +16,7 @@ groups | grep -E 'docker|dialout'
 docker info >/dev/null && echo "docker OK"
 ```
 
-Image `esp32-os-idf:latest` (dựa trên `espressif/idf:v5.4.1`) được **tự build ở lần chạy đầu tiên** (~vài phút, tải ~2 GB).
+Image `gach-os-idf:latest` (dựa trên `espressif/idf:v5.4.1`) được **tự build ở lần chạy đầu tiên** (~vài phút, tải ~2 GB).
 
 ### Cách B — ESP-IDF cài trên máy
 
@@ -48,8 +48,8 @@ Luồng: layer check → build ESP-IDF trong `platform/esp32` → output tại `
 
 | File | Ý nghĩa |
 | :--- | :--- |
-| `esp32_os.bin` | Firmware ứng dụng |
-| `esp32_os.elf` | Có symbol, dùng để debug / giải mã backtrace |
+| `gach_os.bin` | Firmware ứng dụng |
+| `gach_os.elf` | Có symbol, dùng để debug / giải mã backtrace |
 | `bootloader/bootloader.bin`, `partition_table/partition-table.bin` | Bootloader và bảng phân vùng |
 | `flash_args` | Danh sách offset + file để nạp bằng esptool |
 
@@ -115,4 +115,4 @@ python3 -m esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 write_flash @flash_arg
 | Chạm lệch / ngược trục | Mở app **Touch**, so tọa độ hiển thị với vị trí chạm; chỉnh `swap_xy`, `invert_x/y`, `raw_*_min/max` trong `TOUCH`. |
 | Màn hình tối hẳn | Xem log: nếu có `Backlight PWM unavailable` thì GPIO21 bị chiếm/sai. |
 | Reset liên tục, log có `abort()` từ `board` | Lỗi init LCD SPI – dòng `E (...) board: ... failed` cho biết bước nào. |
-| Backtrace khi crash | `monitor` tự giải mã nhờ `esp32_os.elf`; luôn mở monitor từ `./build.sh` để có symbol. |
+| Backtrace khi crash | `monitor` tự giải mã nhờ `gach_os.elf`; luôn mở monitor từ `./build.sh` để có symbol. |

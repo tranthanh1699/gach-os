@@ -1,4 +1,4 @@
-# Kiến trúc esp32-os
+# Kiến trúc gach-os
 
 ## 1. Các tầng
 
