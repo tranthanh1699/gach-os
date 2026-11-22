@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <cstdlib>
 
+#include "framework/app_manager.hpp"
 #include "framework/services.hpp"
 #include "framework/theme.hpp"
 #include "ui_helpers.hpp"
@@ -67,7 +68,7 @@ uint32_t timezone_index(int32_t offset_min)
 } // namespace
 
 SettingsApp::SettingsApp()
-    : fw::App(INFO), m_p_brightness_label(nullptr), m_p_timezone(nullptr), m_p_dialog(nullptr)
+    : fw::App(INFO), m_p_wifi_status(nullptr), m_p_brightness_label(nullptr), m_p_timezone(nullptr), m_p_dialog(nullptr)
 {
 }
 
@@ -75,6 +76,8 @@ void SettingsApp::on_create(lv_obj_t* p_root)
 {
     ui::column_layout(p_root);
     fw::Services& services = context().services;
+
+    create_wifi_row(p_root);
 
     m_p_brightness_label = ui::label(p_root, "", fw::theme::font_small(), fw::theme::COLOR_TEXT);
     lv_obj_t* const p_slider = lv_slider_create(p_root);
@@ -91,6 +94,55 @@ void SettingsApp::on_create(lv_obj_t* p_root)
 
     lv_obj_t* const p_restart = ui::button(p_root, LV_SYMBOL_REFRESH " Restart", &SettingsApp::on_restart_clicked, this);
     lv_obj_set_style_bg_color(p_restart, lv_color_hex(fw::theme::COLOR_DANGER), 0);
+}
+
+void SettingsApp::create_wifi_row(lv_obj_t* p_root)
+{
+    // Dòng kiểu điện thoại: "Wi-Fi      <trạng thái>  >" – chạm để mở trang Wi-Fi.
+    lv_obj_t* const p_row = lv_button_create(p_root);
+    lv_obj_set_size(p_row, LV_PCT(100), LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(p_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(p_row, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_bg_color(p_row, lv_color_hex(fw::theme::COLOR_BAR_BG), 0);
+    lv_obj_set_style_shadow_width(p_row, 0, 0);
+    lv_obj_add_event_cb(p_row, &SettingsApp::on_wifi_clicked, LV_EVENT_CLICKED, this);
+
+    (void)ui::label(p_row, LV_SYMBOL_WIFI " Wi-Fi", fw::theme::font_small(), fw::theme::COLOR_TEXT);
+    m_p_wifi_status = ui::label(p_row, "", fw::theme::font_small(), fw::theme::COLOR_TEXT_MUTED);
+    lv_obj_set_flex_grow(m_p_wifi_status, 1);
+    lv_obj_set_style_text_align(m_p_wifi_status, LV_TEXT_ALIGN_RIGHT, 0);
+    lv_label_set_long_mode(m_p_wifi_status, LV_LABEL_LONG_DOT);
+    (void)ui::label(p_row, LV_SYMBOL_RIGHT, fw::theme::font_small(), fw::theme::COLOR_TEXT_MUTED);
+}
+
+void SettingsApp::on_resume()
+{
+    // Cập nhật trạng thái khi quay về từ trang Wi-Fi.
+    const fw::WifiService& wifi = context().services.wifi();
+    const char* p_status = "Off";
+    switch (wifi.status()) {
+    case fw::WifiStatus::UNAVAILABLE:
+        p_status = "Not available";
+        break;
+    case fw::WifiStatus::CONNECTING:
+        p_status = "Connecting...";
+        break;
+    case fw::WifiStatus::CONNECTED:
+        p_status = wifi.current_ssid();
+        break;
+    case fw::WifiStatus::FAILED:
+        p_status = "Failed";
+        break;
+    case fw::WifiStatus::DISCONNECTED:
+    default:
+        break;
+    }
+    lv_label_set_text(m_p_wifi_status, p_status);
+}
+
+void SettingsApp::on_wifi_clicked(lv_event_t* p_event)
+{
+    (void)static_cast<SettingsApp*>(lv_event_get_user_data(p_event))->context().apps.launch("wifi");
 }
 
 void SettingsApp::create_timezone_row(lv_obj_t* p_root)

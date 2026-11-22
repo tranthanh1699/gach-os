@@ -28,7 +28,9 @@ constexpr const char* PACKAGE_EXT = ".gapp";
 constexpr size_t MANIFEST_BUF_LEN = 512U;
 constexpr size_t DATA_BACKUP_LEN = 1024U;
 constexpr size_t ERROR_BUF_LEN = 96U;
-constexpr size_t SCAN_BATCH = 8U;
+// Đủ chứa toàn bộ thư mục apps/ trong một lần liệt kê (không có API "đọc tiếp" thư mục);
+// +1 để phát hiện thẻ có nhiều app hơn giới hạn.
+constexpr size_t SCAN_BATCH = MAX_PACKAGES + 1U;
 
 hal::IFileSystem* s_p_fs = nullptr;
 fw::AppManager* s_p_apps = nullptr;
@@ -49,6 +51,9 @@ void set_error(const char* p_subject, const char* p_reason)
 {
     (void)std::snprintf(s_error, sizeof(s_error), "%s: %s", p_subject, p_reason);
 }
+
+// Tĩnh (~2 KiB): không đặt trên stack của task main lúc boot.
+NameBatch s_batch;
 
 bool ends_with(const char* p_text, const char* p_suffix)
 {
@@ -175,6 +180,10 @@ common::Status install_package(const char* p_file_name, bool register_now)
         return status;
     }
 
+    if ((find_slot(manifest.id) == nullptr) && (free_slot() == nullptr)) {
+        set_error(manifest.name, "too many apps installed"); // Giữ gói trong install/, không giải nén.
+        return common::Status::ERR_FULL;
+    }
     if (find_slot(manifest.id) != nullptr) {
         status = s_p_apps->unregister_app(manifest.id);
         if (!common::is_ok(status)) {
@@ -209,8 +218,9 @@ common::Status install_all(bool register_now, size_t& installed)
     installed = 0U;
     common::Status first_error = common::Status::OK;
     // Mỗi vòng xử lý một batch; gói cài xong bị xóa nên lần liệt kê sau chỉ còn gói lỗi/chưa xử lý.
-    for (size_t round = 0U; round < MAX_PACKAGES; ++round) {
-        NameBatch batch{};
+    for (size_t round = 0U; round < 4U; ++round) {
+        NameBatch& batch = s_batch;
+        batch.count = 0U;
         batch.want_dirs = false;
         batch.p_suffix = PACKAGE_EXT;
         if (!common::is_ok(s_p_fs->list_dir(INSTALL_DIR, &collect_name, &batch)) || (batch.count == 0U)) {
@@ -249,16 +259,21 @@ common::Status init(const hal::Devices& devices, fw::AppManager& apps)
     (void)make_dirs(*s_p_fs, APPS_DIR);
     (void)make_dirs(*s_p_fs, INSTALL_DIR);
 
-    size_t installed = 0U;
-    (void)install_all(false, installed);
-
-    NameBatch batch{};
+    // Đăng ký app đã cài TRƯỚC, rồi mới cài gói mới -> kiểm tra được giới hạn slot trước khi giải nén.
+    NameBatch& batch = s_batch;
+    batch.count = 0U;
     batch.want_dirs = true;
     batch.p_suffix = nullptr;
-    common::Status status = s_p_fs->list_dir(APPS_DIR, &collect_name, &batch);
+    const common::Status status = s_p_fs->list_dir(APPS_DIR, &collect_name, &batch);
     for (size_t index = 0U; common::is_ok(status) && (index < batch.count); ++index) {
         (void)register_installed(batch.names[index]); // Một app hỏng không chặn app khác.
     }
+    if (batch.count > MAX_PACKAGES) {
+        set_error("apps", "too many apps on SD card");
+    }
+
+    size_t installed = 0U;
+    (void)install_all(true, installed);
     return status;
 }
 

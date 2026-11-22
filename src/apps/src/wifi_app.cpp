@@ -15,7 +15,7 @@ namespace apps {
 
 namespace {
 
-constexpr fw::AppInfo INFO{"wifi", "Wi-Fi", LV_SYMBOL_WIFI, 0x1F6FEBU, true};
+constexpr fw::AppInfo INFO{"wifi", "Wi-Fi", LV_SYMBOL_WIFI, 0x1F6FEBU, false}; // Mở từ Settings, không có icon home.
 constexpr uint32_t REFRESH_PERIOD_MS = 500U;
 constexpr int32_t HEADER_BUTTON_SIZE = 36;
 constexpr size_t ITEM_TEXT_LEN = 64U;

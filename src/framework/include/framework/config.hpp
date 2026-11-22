@@ -11,7 +11,7 @@
 namespace fw {
 namespace config {
 
-constexpr size_t MAX_APPS = 16U;      /**< Số app tối đa đăng ký được. */
+constexpr size_t MAX_APPS = 48U;      /**< Số app tối đa đăng ký được (tích hợp + cài thêm). */
 constexpr size_t MAX_APP_STACK = 4U;  /**< Độ sâu back-stack (bao gồm home). */
 
 constexpr size_t DRAW_BUF_BYTES = 24U * 1024U; /**< Buffer render partial của LVGL (độc lập độ phân giải). */

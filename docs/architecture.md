@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart TD
-    APPS["L5 apps/<br/>Launcher, Wi-Fi, Apps, Settings, System, Touch, Stopwatch"]
+    APPS["L5 apps/<br/>Launcher (nhiều trang), Apps, Settings (+Wi-Fi), System, Touch, Stopwatch"]
     RT["L4.5 runtime/<br/>Gói .gapp · máy ảo Lua · gach SDK"]
     GAPP[["App cài thêm (.gapp, Lua)"]]
     FW["L4 framework/<br/>AppManager · Shell · Services (Wifi, Time) · LVGL port · Theme"]
@@ -133,7 +133,8 @@ Launcher ──launch──► ScriptApp (fw::App, exclusive) ──► ScriptHo
 
 - `fw::App` ≈ Activity của Android: `on_create(p_root) → on_resume ↔ on_pause → on_destroy`, `on_back()` trả `true` nếu tự xử lý.
 - Back-stack tối đa `config::MAX_APP_STACK` (gồm Home). `launch()` app đã có trong stack sẽ quay về app đó.
-- App được cấp phát tĩnh, đăng ký trong `src/apps/src/builtin_apps.cpp`.
+- App được cấp phát tĩnh, đăng ký trong `src/apps/src/builtin_apps.cpp`. `AppInfo::show_in_launcher = false` để ẩn khỏi màn hình chính (VD: Wi-Fi, mở từ Settings).
+- Launcher chia trang 4×2, vuốt ngang (`lv_tileview`). Để tiết kiệm RAM LVGL, lúc đứng yên chỉ giữ icon của trang đang xem, khi vuốt mới dựng thêm trang đích, và khi bị app khác che thì giải phóng toàn bộ icon.
 
 ### Thêm app mới
 

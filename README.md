@@ -18,8 +18,8 @@ Nền tảng: **ESP-IDF** · **LVGL 9** · **C++17** · build bằng **Docker** 
 | :--- | :--- |
 | Board | ESP32-2432S028R ("Cheap Yellow Display") – ILI9341 320x240, XPT2046 |
 | Framework | AppManager (vòng đời + back-stack), Shell (status bar + nav bar), Services (Wi-Fi, thời gian), LVGL port |
-| Ứng dụng | Launcher, Wi-Fi (quét, nhập mật khẩu, tự kết nối lại), Stopwatch, Touch test, System info, Settings |
-| App cài thêm | Gói `.gapp` (Lua 5.4, gach SDK v1) cài từ thẻ SD, app **Apps** quản lý cài/gỡ, sandbox + giới hạn RAM/thời gian – [docs/sdk.md](docs/sdk.md) |
+| Ứng dụng | Launcher nhiều trang (vuốt ngang), Apps, Stopwatch, Touch test, System info, Settings (Wi-Fi, độ sáng, múi giờ) |
+| App cài thêm | Gói `.gapp` (Lua 5.4, gach SDK v2) cài từ thẻ SD (tối đa 32 app), app **Apps** quản lý cài/gỡ, sandbox + giới hạn RAM/thời gian – [docs/sdk.md](docs/sdk.md) |
 | Mạng & giờ | Wi-Fi STA, giờ chuẩn từ NTP Google (`time.google.com`), chọn múi giờ trong Settings (mặc định UTC+7), lưu NVS |
 | Cưỡng chế kiến trúc | `tools/layer_check.py` + ESP-IDF component REQUIRES |
 
@@ -53,7 +53,7 @@ platform/esp32/             ESP-IDF project cho họ ESP32
   boards/esp32_2432s028/    Pin map, hiệu chuẩn, composition root
   main/                     app_main()
 tools/                      layer_matrix.json, layer_check.py (+ test), gapp_pack.py
-examples/apps/              App mẫu (.gapp): counter, world_clock
+appstore/                   Kho app cài thêm: apps/<tên> (calculator, counter, world_clock), gapp.sh
 third_party/lua/            Lua 5.4.7 (MIT)
 docker/                     Dockerfile môi trường build
 docs/architecture.md        Kiến trúc, layer matrix, hướng dẫn port
@@ -67,6 +67,6 @@ Chi tiết: [docs/architecture.md](docs/architecture.md) · Quy tắc cho AI age
 - [ ] Flush DMA bất đồng bộ + double buffer
 - [x] Wi-Fi, giờ NTP, lưu cài đặt (NVS) qua framework services
 - [x] Chọn múi giờ trong Settings
-- [x] App cài thêm từ thẻ SD (runtime Lua + gach SDK v1)
+- [x] App cài thêm từ thẻ SD (runtime Lua + gach SDK v2)
 - [ ] Kho ứng dụng: tải `.gapp` qua Wi-Fi về `/install` + danh mục từ server
 - [ ] Board thứ hai (ESP32-S3 + ST7789/GT911) để chứng minh tính port
