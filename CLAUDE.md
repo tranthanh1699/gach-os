@@ -16,7 +16,7 @@ Hệ điều hành giao diện kiểu điện thoại (Nokia S60 / Android) cho 
 ./build.sh --list             # liệt kê board
 ./build.sh shell              # bash trong container ESP-IDF
 python3 -m unittest tools/test_layer_check.py
-python3 tools/gapp_pack.py examples/apps/counter   # đóng gói app cài thêm (.gapp)
+./appstore/gapp.sh pack                       # đóng gói app cài thêm (appstore/apps -> appstore/dist/*.gapp)
 ```
 Chi tiết build/flash/sự cố: [`docs/build_and_flash.md`](docs/build_and_flash.md). Build output: `build/<board>/`. Không gọi `idf.py` trực tiếp ở gốc repo — project ESP-IDF nằm ở `platform/esp32/`.
 
@@ -30,6 +30,7 @@ src/hal_api    L2  IDisplay/ITouch/IBacklight/ISystem + hal::board_init()
 src/mcal,osal  L1  contract ngoại vi / RTOS (osal/port/* là nơi duy nhất trong src/ được include RTOS)
 src/common     L0  Status, NonCopyable
 platform/<chip>    MCAL impl bằng SDK chip, boards/<board> (composition root), main, build.sh
+appstore/          Kho app cài thêm (Lua): apps/<tên>, template/, gapp.sh – xem appstore/README.md
 ```
 - Ma trận đầy đủ: [`tools/layer_matrix.json`](tools/layer_matrix.json) · giải thích: [`docs/architecture.md`](docs/architecture.md).
 - **Chỉ `platform/` được include header SDK (`esp_*`, `driver/*`, `freertos/*`).** Header public của framework không được include `hal_api/`/`osal/`.

@@ -19,13 +19,12 @@ jobs:
         run: python3 -m unittest tools/test_layer_check.py -v
       - name: Layer check
         run: python3 tools/layer_check.py
-      - name: Package example apps (.gapp)
-        run: |
-          for app in examples/apps/*/; do python3 tools/gapp_pack.py "$app"; done
+      - name: Package appstore (.gapp + index.json)
+        run: ./appstore/gapp.sh pack
       - uses: actions/upload-artifact@v4
         with:
-          name: example-apps
-          path: build/gapp/*.gapp
+          name: appstore
+          path: appstore/dist/
           if-no-files-found: error
 
   build:

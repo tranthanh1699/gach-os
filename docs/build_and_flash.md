@@ -90,7 +90,7 @@ python3 -m esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 write_flash @flash_arg
 
 - Thẻ microSD định dạng **FAT32**, cắm trước khi bật nguồn. Log boot có `sd=yes`.
 - OS tự tạo thư mục `/install` (chép gói `.gapp` vào đây) và `/apps` (app đã cài) trên thẻ.
-- Đóng gói app: `python3 tools/gapp_pack.py examples/apps/counter`, rồi chép `build/gapp/*.gapp` vào `/install`.
+- Đóng gói và chép app lên thẻ: `./appstore/gapp.sh install /media/$USER/SDCARD` (xem [appstore/README.md](../appstore/README.md)).
 - Log boot sẽ có dòng `main: Runtime: ready, N package(s)`. Chi tiết: [docs/sdk.md](sdk.md).
 
 ## 5. Lệnh khác

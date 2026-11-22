@@ -1,4 +1,4 @@
-# gach SDK v1: viết app cài thêm cho gach-os
+# gach SDK (v2): viết app cài thêm cho gach-os
 
 App cài thêm là một **gói `.gapp`** chứa mã Lua 5.4, tương tự file `.jar` trên Nokia S60 hay `.apk` trên Android. Gói chạy trong máy ảo có sandbox, nên cùng một gói chạy được trên mọi board gach-os, bất kể chip hay kích thước màn hình.
 
@@ -65,6 +65,24 @@ Mọi widget được tham chiếu bằng **handle số nguyên**. Handle trở 
 | `clear(h)` | Xóa mọi widget con |
 | `delete(h)` | Xóa widget (không xóa được root) |
 
+#### Bố cục & kiểu dáng (SDK v2, manifest `sdk=2`)
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `box(parent) -> h` | Khối trống không nhận chạm: dùng làm hình trang trí (chấm, gạch, khung) |
+| `set_size(h, w?, h?)` | Kích thước: số pixel, `"N%"` (theo cha) hoặc `"content"`; `nil` = giữ nguyên |
+| `set_grow(h, n)` | Chiếm phần trống còn lại trong `row`/`column` theo tỷ lệ `n` |
+| `set_bg(h, 0xRRGGBB)` | Màu nền (kiểu phẳng, không đổ bóng) |
+| `set_radius(h, px\|"round")` | Bo góc; `"round"` = bo tròn tối đa (nút tròn / viên thuốc) |
+| `set_align(h, "left"\|"center"\|"right")` | Căn lề chữ |
+| `set_pad(h, px)` / `set_gap(h, px)` | Lề trong / khoảng cách giữa các phần tử con |
+| `center(h)` | Căn giữa trong widget cha (VD: ký hiệu vẽ tay trong nút) |
+| `SYMBOL.<TÊN>` | Ký hiệu có sẵn trong font: `PLUS MINUS CLOSE OK LEFT RIGHT UP DOWN HOME SETTINGS REFRESH PLAY PAUSE STOP BELL WIFI TRASH EDIT BACKSPACE WARNING` |
+
+Font hệ thống chỉ có ASCII cùng các ký hiệu trong `SYMBOL`; ký tự khác (VD: `÷`, chữ có dấu) sẽ hiện ô trống. Ký hiệu thiếu có thể vẽ bằng `box` (xem nút chia trong app Calculator).
+
+`column`/`row` chỉ dùng để bố cục, không nhận chạm (chạm rơi xuống widget chứa nó).
+
 ### gach.timer
 
 | Hàm | Mô tả |
@@ -108,20 +126,22 @@ Thư viện Lua có sẵn: `string`, `table`, `math`, `utf8`, `coroutine` và c�
 | Thời gian mỗi lần gọi (callback, vòng đời) | 500 ms | Lỗi `script timeout` |
 | Widget | 96 / app | Lỗi `too many UI objects` |
 | Timer | 8 / app | Lỗi `too many timers` |
-| App cài đồng thời | 8 | Báo lỗi khi cài |
+| App cài đồng thời | 32 | Báo lỗi `too many apps installed`, gói được giữ lại trong `/install` |
 | App script mở cùng lúc | 1 (mở app khác sẽ đóng app trước) | |
 
 Khi app gặp lỗi, chỉ app đó hiện màn hình **App error** kèm thông báo; OS và các app khác vẫn chạy bình thường. Nhấn Back để thoát.
 
-Số học dùng số nguyên 32 bit và float 32 bit (`LUA_32BITS`), nên tránh các phép tính cần độ chính xác double.
+Số nguyên là **32 bit** (phép toán số nguyên tràn sẽ quay vòng: muốn tính số lớn, đổi sang số thực bằng `x * 1.0`). Số thực là **double** (~15 chữ số có nghĩa).
 
 ## 4. Đóng gói và cài đặt
 
 ```bash
-python3 tools/gapp_pack.py examples/apps/counter   # -> build/gapp/org.gachos.counter.gapp
+./appstore/gapp.sh new my_app --name "My App"     # tạo app mới trong appstore/apps/my_app
+./appstore/gapp.sh pack my_app                       # -> appstore/dist/<id>.gapp
+./appstore/gapp.sh install /media/$USER/SDCARD my_app  # đóng gói + chép vào <SD>/install/
 ```
 
-Công cụ kiểm tra manifest, file entry, và cú pháp Lua (nếu máy có `luac`). Gói là file tar ustar không nén, nên có thể kiểm tra bằng `tar tvf`.
+Công cụ kiểm tra manifest, file entry, và cú pháp Lua (nếu máy có `luac`). Chi tiết quy trình: [appstore/README.md](../appstore/README.md). Gói là file tar ustar không nén, nên có thể kiểm tra bằng `tar tvf`.
 
 Cài lên máy:
 
@@ -135,10 +155,16 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 
 ## 5. Ví dụ
 
-- [`examples/apps/counter`](../examples/apps/counter): UI, sự kiện, timer, `gach.storage`.
-- [`examples/apps/world_clock`](../examples/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
+- [`appstore/apps/counter`](../appstore/apps/counter): UI, sự kiện, timer, `gach.storage`.
+- [`appstore/apps/world_clock`](../appstore/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
+- [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v2): máy tính bỏ túi kiểu điện thoại, gồm bố cục lưới co giãn, nút tròn, đổi màu khi chọn toán tử, và ký hiệu `÷` vẽ bằng `box`.
 
 ## 6. Tương thích
+
+| SDK | Thêm mới |
+| :--- | :--- |
+| 1 | `gach.ui` cơ bản, `timer`, `sys`, `storage`, `app` |
+| 2 | Bố cục & kiểu dáng: `box`, `set_size`, `set_grow`, `set_bg`, `set_radius`, `set_align`, `set_pad`, `set_gap`, `center`, `SYMBOL` |
 
 - Runtime từ chối gói có `sdk` lớn hơn `gach.sdk_version` của máy.
 - API đã phát hành **không bao giờ bị xóa hay đổi nghĩa**; SDK mới chỉ thêm API. App viết cho `sdk=1` chạy được trên mọi bản gach-os về sau.
