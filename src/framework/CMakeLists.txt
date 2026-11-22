@@ -5,6 +5,8 @@ idf_component_register(SRCS "src/app_manager.cpp"
                             "src/services.cpp"
                             "src/shell.cpp"
                             "src/system.cpp"
+                            "src/time_service.cpp"
+                            "src/wifi_service.cpp"
                        INCLUDE_DIRS "include"
                        PRIV_INCLUDE_DIRS "src"
                        REQUIRES common lvgl__lvgl

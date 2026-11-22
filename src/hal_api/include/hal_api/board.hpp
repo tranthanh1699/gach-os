@@ -9,9 +9,12 @@
 #define HAL_API_BOARD_HPP
 
 #include "hal_api/backlight.hpp"
+#include "hal_api/clock.hpp"
 #include "hal_api/display.hpp"
+#include "hal_api/storage.hpp"
 #include "hal_api/system.hpp"
 #include "hal_api/touch.hpp"
+#include "hal_api/wifi.hpp"
 
 namespace hal {
 
@@ -22,6 +25,9 @@ struct Devices {
     ITouch* p_touch;          /**< Tùy chọn. */
     IBacklight* p_backlight;  /**< Tùy chọn. */
     ISystem* p_system;        /**< Bắt buộc. */
+    IKeyValueStore* p_storage; /**< Tùy chọn: lưu cài đặt. */
+    IWifi* p_wifi;            /**< Tùy chọn. */
+    IClock* p_clock;          /**< Tùy chọn: giờ thực (SNTP). */
 };
 
 /**

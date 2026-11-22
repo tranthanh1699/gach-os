@@ -9,6 +9,13 @@
 
 namespace fw {
 
+void Services::bind(const hal::Devices& devices)
+{
+    m_p_devices = &devices;
+    m_wifi.bind(devices);
+    m_time.bind(devices);
+}
+
 bool Services::has_backlight() const
 {
     return (m_p_devices != nullptr) && (m_p_devices->p_backlight != nullptr);

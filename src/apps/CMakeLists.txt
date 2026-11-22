@@ -5,6 +5,7 @@ idf_component_register(SRCS "src/builtin_apps.cpp"
                             "src/stopwatch_app.cpp"
                             "src/sysinfo_app.cpp"
                             "src/touch_test_app.cpp"
+                            "src/wifi_app.cpp"
                        INCLUDE_DIRS "include"
                        PRIV_INCLUDE_DIRS "src"
                        REQUIRES common framework

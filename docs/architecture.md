@@ -4,15 +4,15 @@
 
 ```mermaid
 flowchart TD
-    APPS["L5 apps/<br/>Launcher, Settings, System, Touch, Stopwatch"]
-    FW["L4 framework/<br/>AppManager · Shell · Services · LVGL port · Theme"]
+    APPS["L5 apps/<br/>Launcher, Wi-Fi, Settings, System, Touch, Stopwatch"]
+    FW["L4 framework/<br/>AppManager · Shell · Services (Wifi, Time) · LVGL port · Theme"]
     LVGL[["LVGL 9 (thư viện ngoài)"]]
-    HAL["L2 hal_api/<br/>IDisplay · ITouch · IBacklight · ISystem · board_init()"]
+    HAL["L2 hal_api/<br/>IDisplay · ITouch · IBacklight · ISystem<br/>IWifi · IClock · IKeyValueStore · board_init()"]
     DRV["L3 drivers/<br/>Ili9341 · Xpt2046 · PwmBacklight"]
     MCAL["L1 mcal/<br/>ISpiDevice · IGpio* · IPwmChannel"]
     OSAL["L1 osal/<br/>Task · Mutex · tick/delay"]
     COMMON["L0 common/<br/>Status · NonCopyable"]
-    PLAT["platform/&lt;chip&gt;/<br/>MCAL impl (ESP-IDF) · boards/&lt;board&gt; · main"]
+    PLAT["platform/&lt;chip&gt;/<br/>MCAL + Wi-Fi/SNTP/NVS (ESP-IDF) · boards/&lt;board&gt; · main"]
 
     APPS --> FW
     APPS --> LVGL
@@ -84,7 +84,24 @@ app_main()                                   platform/esp32/main/main.cpp
 
 > Mọi lời gọi LVGL (kể cả khởi tạo) chỉ diễn ra trong UI task. Task khác muốn chạm LVGL phải giữ `fw::UiLock`.
 
-## 4. Mô hình ứng dụng
+## 4. Mạng & thời gian
+
+```
+App Wi-Fi ──connect(ssid, pass, remember)──► fw::WifiService ──► hal::IWifi (Esp32Wifi, không chặn)
+                                                  ▲ poll() mỗi 500 ms (UI task)
+                                                  │ cạnh lên CONNECTED
+                                                  ├─► lưu SSID/mật khẩu vào hal::IKeyValueStore (NVS)
+                                                  └─► fw::TimeService::on_network_up()
+                                                         └─► hal::IClock::start_sync("time.google.com")  (SNTP, đồng bộ lại mỗi giờ)
+Shell / app ◄── fw::TimeService::now(): UTC + múi giờ (mặc định UTC+7, lưu NVS) → fw::DateTime
+```
+
+- Mọi thao tác mạng là **bất đồng bộ + polling**: UI không bao giờ bị chặn; HAL Wi-Fi tự đảm bảo thread-safe (event task ↔ UI task).
+- Boot: `WifiService::start()` tự kết nối lại mạng đã lưu sau khi khung hình đầu đã hiển thị.
+- Chưa đồng bộ NTP → status bar hiển thị `--:--` (không hiển thị giờ sai).
+- Chuyển epoch → ngày giờ bằng thuật toán thuần (`fw::epoch_to_datetime`), không phụ thuộc libc/TZ của chip.
+
+## 5. Mô hình ứng dụng
 
 - `fw::App` ≈ Activity của Android: `on_create(p_root) → on_resume ↔ on_pause → on_destroy`, `on_back()` trả `true` nếu tự xử lý.
 - Back-stack tối đa `config::MAX_APP_STACK` (gồm Home). `launch()` app đã có trong stack sẽ quay về app đó.
@@ -96,7 +113,7 @@ app_main()                                   platform/esp32/main/main.cpp
 2. Thêm instance tĩnh vào mảng `s_apps` trong `builtin_apps.cpp`, thêm `.cpp` vào `src/apps/CMakeLists.txt`.
 3. `./build.sh` (layer check tự chạy).
 
-## 5. Port sang chip / board mới
+## 6. Port sang chip / board mới
 
 | Việc | Chạm vào | Không chạm |
 | :--- | :--- | :--- |

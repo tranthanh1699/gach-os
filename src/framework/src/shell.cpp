@@ -11,10 +11,8 @@ namespace fw {
 
 namespace {
 
-constexpr uint32_t MS_PER_MINUTE = 60000U;
-constexpr uint32_t MINUTES_PER_HOUR = 60U;
-constexpr uint32_t HOURS_PER_DAY = 24U;
 constexpr int32_t BAR_PAD_HOR = 8;
+constexpr int32_t STATUS_ICON_GAP = 6;
 constexpr int32_t NAV_BUTTON_WIDTH = 72;
 
 lv_obj_t* create_bar(lv_obj_t* p_parent, int32_t height)
@@ -34,7 +32,8 @@ lv_obj_t* create_bar(lv_obj_t* p_parent, int32_t height)
 } // namespace
 
 Shell::Shell()
-    : m_p_apps(nullptr), m_p_services(nullptr), m_p_title(nullptr), m_p_clock(nullptr), m_p_content(nullptr)
+    : m_p_apps(nullptr), m_p_services(nullptr), m_p_title(nullptr), m_p_wifi_icon(nullptr), m_p_clock(nullptr),
+      m_p_content(nullptr)
 {
 }
 
@@ -50,12 +49,21 @@ void Shell::create(AppManager& apps, const Services& services)
     lv_obj_set_flex_flow(p_screen, LV_FLEX_FLOW_COLUMN);
     lv_obj_remove_flag(p_screen, LV_OBJ_FLAG_SCROLLABLE);
 
-    // Status bar: tiêu đề app (trái) + đồng hồ (phải).
+    // Status bar: tiêu đề app (trái) | icon Wi-Fi + đồng hồ (phải).
     lv_obj_t* const p_status = create_bar(p_screen, config::STATUS_BAR_HEIGHT);
     m_p_title = lv_label_create(p_status);
     lv_obj_set_style_text_color(m_p_title, lv_color_hex(theme::COLOR_TEXT), 0);
     lv_label_set_text(m_p_title, "");
-    m_p_clock = lv_label_create(p_status);
+
+    lv_obj_t* const p_right = lv_obj_create(p_status);
+    lv_obj_remove_style_all(p_right);
+    lv_obj_set_size(p_right, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(p_right, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(p_right, LV_FLEX_ALIGN_END, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(p_right, STATUS_ICON_GAP, 0);
+    m_p_wifi_icon = lv_label_create(p_right);
+    lv_label_set_text(m_p_wifi_icon, LV_SYMBOL_WIFI);
+    m_p_clock = lv_label_create(p_right);
     lv_obj_set_style_text_color(m_p_clock, lv_color_hex(theme::COLOR_TEXT), 0);
 
     // Content area: chiếm toàn bộ phần còn lại.
@@ -112,11 +120,23 @@ void Shell::on_status_timer(lv_timer_t* p_timer)
 
 void Shell::refresh_status()
 {
-    // TODO(kysu_v): thay uptime bằng RTC/SNTP khi có service thời gian thực.
-    const uint32_t total_min = m_p_services->uptime_ms() / MS_PER_MINUTE;
-    const auto hours = static_cast<unsigned>((total_min / MINUTES_PER_HOUR) % HOURS_PER_DAY);
-    const auto minutes = static_cast<unsigned>(total_min % MINUTES_PER_HOUR);
-    lv_label_set_text_fmt(m_p_clock, "%02u:%02u", hours, minutes);
+    DateTime now{};
+    if (m_p_services->time().now(now)) {
+        lv_label_set_text_fmt(m_p_clock, "%02u:%02u", static_cast<unsigned>(now.hour), static_cast<unsigned>(now.minute));
+    } else {
+        lv_label_set_text(m_p_clock, "--:--"); // Chưa đồng bộ NTP: không hiển thị giờ sai.
+    }
+
+    // Icon Wi-Fi: trắng = đã kết nối, xám = đang kết nối, ẩn = không kết nối.
+    const WifiStatus wifi = m_p_services->wifi().status();
+    const bool show_wifi = (wifi == WifiStatus::CONNECTED) || (wifi == WifiStatus::CONNECTING);
+    if (show_wifi) {
+        lv_obj_remove_flag(m_p_wifi_icon, LV_OBJ_FLAG_HIDDEN);
+        const uint32_t color = (wifi == WifiStatus::CONNECTED) ? theme::COLOR_TEXT : theme::COLOR_TEXT_MUTED;
+        lv_obj_set_style_text_color(m_p_wifi_icon, lv_color_hex(color), 0);
+    } else {
+        lv_obj_add_flag(m_p_wifi_icon, LV_OBJ_FLAG_HIDDEN);
+    }
 }
 
 } // namespace fw

@@ -17,8 +17,9 @@ Nền tảng: **ESP-IDF** · **LVGL 9** · **C++17** · build bằng **Docker** 
 | Hạng mục | Trạng thái |
 | :--- | :--- |
 | Board | ESP32-2432S028R ("Cheap Yellow Display") – ILI9341 320x240, XPT2046 |
-| Framework | AppManager (vòng đời + back-stack), Shell (status bar + nav bar), Services, LVGL port |
-| Ứng dụng | Launcher, Stopwatch, Touch test, System info, Settings (độ sáng, restart) |
+| Framework | AppManager (vòng đời + back-stack), Shell (status bar + nav bar), Services (Wi-Fi, thời gian), LVGL port |
+| Ứng dụng | Launcher, Wi-Fi (quét, nhập mật khẩu, tự kết nối lại), Stopwatch, Touch test, System info, Settings |
+| Mạng & giờ | Wi-Fi STA, giờ chuẩn từ NTP Google (`time.google.com`), chọn múi giờ trong Settings (mặc định UTC+7), lưu NVS |
 | Cưỡng chế kiến trúc | `tools/layer_check.py` + ESP-IDF component REQUIRES |
 
 ## Bắt đầu nhanh
@@ -60,5 +61,6 @@ Chi tiết: [docs/architecture.md](docs/architecture.md) · Quy tắc cho AI age
 
 - [ ] Platform `host` (SDL2) để chạy/kiểm thử UI trên PC
 - [ ] Flush DMA bất đồng bộ + double buffer
-- [ ] Dịch vụ thời gian (RTC/SNTP), Wi-Fi, lưu cài đặt (NVS) qua framework services
+- [x] Wi-Fi, giờ NTP, lưu cài đặt (NVS) qua framework services
+- [x] Chọn múi giờ trong Settings
 - [ ] Board thứ hai (ESP32-S3 + ST7789/GT911) để chứng minh tính port

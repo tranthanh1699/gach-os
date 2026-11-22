@@ -10,15 +10,19 @@
 #include "drivers/ili9341.hpp"
 #include "drivers/pwm_backlight.hpp"
 #include "drivers/xpt2046.hpp"
+#include "esp32_mcal/esp32_clock.hpp"
 #include "esp32_mcal/esp32_gpio.hpp"
+#include "esp32_mcal/esp32_nvs_store.hpp"
 #include "esp32_mcal/esp32_pwm.hpp"
 #include "esp32_mcal/esp32_spi.hpp"
 #include "esp32_mcal/esp32_system.hpp"
+#include "esp32_mcal/esp32_wifi.hpp"
 #include "esp_log.h"
 
 namespace {
 
 constexpr const char* TAG = "board";
+constexpr const char* NVS_NAMESPACE = "gach_os";
 
 // ---- MCAL instances (cấp phát tĩnh) ----
 esp32_mcal::Esp32SpiBus s_lcd_bus;
@@ -28,13 +32,16 @@ esp32_mcal::Esp32SpiBus s_touch_bus;
 esp32_mcal::Esp32SpiDevice s_touch_spi;
 esp32_mcal::Esp32PwmChannel s_backlight_pwm;
 esp32_mcal::Esp32System s_system;
+esp32_mcal::Esp32NvsStore s_storage;
+esp32_mcal::Esp32Wifi s_wifi;
+esp32_mcal::Esp32Clock s_clock;
 
 // ---- Driver instances (tiêm MCAL qua constructor) ----
 drivers::Ili9341 s_display{s_lcd_spi, s_lcd_dc, nullptr, board::cfg::DISPLAY};
 drivers::Xpt2046 s_touch{s_touch_spi, nullptr, board::cfg::TOUCH};
 drivers::PwmBacklight s_backlight{s_backlight_pwm, board::cfg::BACKLIGHT_ACTIVE_HIGH};
 
-hal::Devices s_devices{board::cfg::BOARD_NAME, &s_display, nullptr, nullptr, &s_system};
+hal::Devices s_devices{board::cfg::BOARD_NAME, &s_display, nullptr, nullptr, &s_system, nullptr, nullptr, nullptr};
 
 /** @brief Thiết bị bắt buộc lỗi -> dừng hệ thống (không có màn hình thì OS vô nghĩa). */
 void require(common::Status status, const char* p_what)
@@ -78,8 +85,19 @@ const Devices& board_init()
         s_devices.p_touch = &s_touch;
     }
 
-    ESP_LOGI(TAG, "%s ready (%ux%u, touch=%s)", BOARD_NAME, static_cast<unsigned>(SCREEN_WIDTH),
-             static_cast<unsigned>(SCREEN_HEIGHT), touch_ok ? "yes" : "no");
+    // NVS trước Wi-Fi: Wi-Fi driver cần NVS để lưu dữ liệu hiệu chuẩn RF.
+    const bool storage_ok = optional(s_storage.init(NVS_NAMESPACE), "NVS storage");
+    if (storage_ok) {
+        s_devices.p_storage = &s_storage;
+    }
+    const bool wifi_ok = storage_ok && optional(s_wifi.init(), "Wi-Fi");
+    if (wifi_ok) {
+        s_devices.p_wifi = &s_wifi;
+        s_devices.p_clock = &s_clock; // SNTP cần netif do Wi-Fi khởi tạo.
+    }
+
+    ESP_LOGI(TAG, "%s ready (%ux%u, touch=%s, wifi=%s)", BOARD_NAME, static_cast<unsigned>(SCREEN_WIDTH),
+             static_cast<unsigned>(SCREEN_HEIGHT), touch_ok ? "yes" : "no", wifi_ok ? "yes" : "no");
     return s_devices;
 }
 

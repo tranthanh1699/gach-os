@@ -20,7 +20,8 @@ enum class Status : uint8_t {
     ERR_IO,            /**< Lỗi truyền nhận phần cứng. */
     ERR_NO_MEM,        /**< Hết tài nguyên tĩnh / bộ nhớ. */
     ERR_NOT_SUPPORTED, /**< Tính năng không được nền tảng hỗ trợ. */
-    ERR_FULL           /**< Bảng/registry đã đầy. */
+    ERR_FULL,          /**< Bảng/registry đã đầy. */
+    ERR_NOT_FOUND      /**< Không tìm thấy khóa/đối tượng. */
 };
 
 /** @brief Tiện ích kiểm tra nhanh trạng thái thành công. */

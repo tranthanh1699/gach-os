@@ -42,6 +42,15 @@ osal::Mutex& ui_mutex()
     return s_mutex;
 }
 
+/** @brief Cập nhật trạng thái mạng; vừa có kết nối -> đồng bộ giờ từ NTP. */
+void on_net_poll(lv_timer_t* p_timer)
+{
+    (void)p_timer;
+    if (s_services.wifi().poll()) {
+        s_services.time().on_network_up();
+    }
+}
+
 /** @brief Khởi tạo thiết bị + LVGL + Shell + app home. Chỉ chạy trong UI task. */
 common::Status init_ui(const hal::Devices& devices)
 {
@@ -75,6 +84,10 @@ common::Status init_ui(const hal::Devices& devices)
     // Vẽ khung đầu tiên trước khi bật đèn nền để không lộ dữ liệu rác của GRAM.
     lv_refr_now(p_disp);
     (void)s_services.set_brightness(config::DEFAULT_BRIGHTNESS);
+
+    // Mạng khởi động sau UI: kết nối lại Wi-Fi đã lưu không làm chậm màn hình đầu tiên.
+    s_services.wifi().start();
+    (void)lv_timer_create(&on_net_poll, config::NET_POLL_PERIOD_MS, nullptr);
     return common::Status::OK;
 }
 

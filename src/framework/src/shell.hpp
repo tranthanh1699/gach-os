@@ -1,6 +1,6 @@
 /**
  * @file    shell.hpp
- * @brief   [Private] System UI: status bar (tiêu đề + giờ) và nav bar (Back / Home).
+ * @brief   [Private] System UI: status bar (tiêu đề + Wi-Fi + giờ) và nav bar (Back / Home).
  */
 #ifndef FRAMEWORK_SHELL_HPP
 #define FRAMEWORK_SHELL_HPP
@@ -20,7 +20,7 @@ public:
     /**
      * @brief Dựng status bar, content area, nav bar trên màn hình hiện tại.
      * @param[in] apps     App manager (nhận lệnh Back/Home).
-     * @param[in] services Dịch vụ hệ thống (uptime).
+     * @param[in] services Dịch vụ hệ thống (giờ, trạng thái Wi-Fi).
      */
     void create(AppManager& apps, const Services& services);
 
@@ -39,6 +39,7 @@ private:
     AppManager* m_p_apps;
     const Services* m_p_services;
     lv_obj_t* m_p_title;
+    lv_obj_t* m_p_wifi_icon;
     lv_obj_t* m_p_clock;
     lv_obj_t* m_p_content;
 };

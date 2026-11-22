@@ -9,6 +9,8 @@
 
 #include "common/non_copyable.hpp"
 #include "common/status.hpp"
+#include "framework/time_service.hpp"
+#include "framework/wifi_service.hpp"
 
 namespace hal {
 struct Devices; // Forward declaration: header này không lộ HAL cho tầng app.
@@ -35,8 +37,16 @@ class Services : private common::NonCopyable {
 public:
     Services() : m_p_devices(nullptr) {}
 
-    /** @brief [Nội bộ framework] Gắn tập thiết bị của board. */
-    void bind(const hal::Devices& devices) { m_p_devices = &devices; }
+    /** @brief [Nội bộ framework] Gắn tập thiết bị của board (kể cả các dịch vụ con). */
+    void bind(const hal::Devices& devices);
+
+    /** @return Dịch vụ Wi-Fi. */
+    WifiService& wifi() { return m_wifi; }
+    const WifiService& wifi() const { return m_wifi; }
+
+    /** @return Dịch vụ thời gian. */
+    TimeService& time() { return m_time; }
+    const TimeService& time() const { return m_time; }
 
     /** @return true nếu board có đèn nền điều chỉnh được. */
     bool has_backlight() const;
@@ -58,6 +68,8 @@ public:
 
 private:
     const hal::Devices* m_p_devices;
+    WifiService m_wifi;
+    TimeService m_time;
 };
 
 } // namespace fw
