@@ -34,6 +34,8 @@ struct AppInfo {
     const char* p_icon;    /**< Ký hiệu LV_SYMBOL_*. */
     uint32_t color_hex;    /**< Màu icon trên launcher (0xRRGGBB). */
     bool show_in_launcher; /**< false cho app hệ thống (VD: chính launcher). */
+    bool exclusive;        /**< Dùng tài nguyên độc quyền (VD: máy ảo script): mở app exclusive khác
+                                sẽ đóng app này nếu nó còn trong back-stack. */
 };
 
 /** @brief Lớp cơ sở mọi ứng dụng. App được cấp phát tĩnh, không new/delete. */
@@ -64,10 +66,16 @@ protected:
     /** @return Ngữ cảnh framework. Hợp lệ sau khi app được đăng ký. */
     Context& context() const { return *m_p_context; }
 
+    /**
+     * @brief Đổi metadata lúc chạy (app nạp động: tên/icon lấy từ manifest).
+     * @warning Chỉ gọi khi app chưa đăng ký; chuỗi trỏ tới phải sống bằng đời app.
+     */
+    void set_info(const AppInfo& info) { m_info = info; }
+
 private:
     friend class AppManager;
 
-    const AppInfo m_info;
+    AppInfo m_info;
     Context* m_p_context;
 };
 

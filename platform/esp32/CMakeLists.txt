@@ -19,6 +19,7 @@ endif()
 
 set(EXTRA_COMPONENT_DIRS
     "${OS_ROOT_DIR}/src"
+    "${OS_ROOT_DIR}/third_party"
     "${CMAKE_CURRENT_LIST_DIR}/components"
     "${OS_BOARD_DIR}/board")
 

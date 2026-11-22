@@ -2,6 +2,6 @@
 idf_component_register(SRCS "src/board.cpp"
                        PRIV_INCLUDE_DIRS "src"
                        REQUIRES hal_api
-                       PRIV_REQUIRES common mcal drivers esp32_mcal log)
+                       PRIV_REQUIRES common mcal drivers esp32_mcal log heap)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE ${OS_STRICT_FLAGS})

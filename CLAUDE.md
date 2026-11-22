@@ -16,12 +16,14 @@ Hệ điều hành giao diện kiểu điện thoại (Nokia S60 / Android) cho 
 ./build.sh --list             # liệt kê board
 ./build.sh shell              # bash trong container ESP-IDF
 python3 -m unittest tools/test_layer_check.py
+python3 tools/gapp_pack.py examples/apps/counter   # đóng gói app cài thêm (.gapp)
 ```
 Chi tiết build/flash/sự cố: [`docs/build_and_flash.md`](docs/build_and_flash.md). Build output: `build/<board>/`. Không gọi `idf.py` trực tiếp ở gốc repo — project ESP-IDF nằm ở `platform/esp32/`.
 
 ## 3. Kiến trúc (BẮT BUỘC tuân thủ)
 ```
-src/apps       L5  chỉ dùng framework/ + lvgl
+src/apps       L5  chỉ dùng framework/ + runtime/ (public) + lvgl
+src/runtime    L4.5 gói .gapp + máy ảo Lua + gach SDK (chỉ tầng này được include Lua)
 src/framework  L4  AppManager, Shell, Services, LVGL port — dùng hal_api/, osal/, lvgl
 src/drivers    L3  driver IC portable — dùng mcal/, osal/, hal_api/
 src/hal_api    L2  IDisplay/ITouch/IBacklight/ISystem + hal::board_init()
@@ -34,6 +36,7 @@ platform/<chip>    MCAL impl bằng SDK chip, boards/<board> (composition root),
 - Include luôn có tiền tố tầng: `#include "framework/app.hpp"`.
 - Thêm phụ thuộc giữa tầng ⇒ sửa đồng thời `layer_matrix.json` + `REQUIRES` trong CMakeLists, và phải được Kỹ sư V đồng ý (thay đổi kiến trúc).
 - Chạy `./build.sh check` sau mọi thay đổi trong `src/` hoặc `platform/`.
+- gach SDK ([`docs/sdk.md`](docs/sdk.md)) là hợp đồng công khai với app trên kho: **chỉ thêm API, không xóa/đổi nghĩa**; thêm API phải tăng `runtime::SDK_VERSION` và cập nhật `docs/sdk.md`.
 
 ## 4. Clean code (tóm tắt — chi tiết [`.agent/rules/coding_standards.md`](.agent/rules/coding_standards.md))
 - Naming: file/hàm/namespace `snake_case`; class `PascalCase`; interface `IPascalCase`; member `m_`, static `s_`, global `g_`, con trỏ `p_`; hằng/enum value `UPPER_SNAKE_CASE`; `enum class`.

@@ -1,31 +1,162 @@
 {
   "$comment": "Ma trận phụ thuộc giữa các tầng. Nguồn sự thật duy nhất cho tools/layer_check.py và docs/architecture.md. Path dài nhất khớp sẽ thắng.",
   "layers": {
-    "common":           { "paths": ["src/common/"],           "include_prefix": "common/" },
-    "mcal":             { "paths": ["src/mcal/"],             "include_prefix": "mcal/" },
-    "osal":             { "paths": ["src/osal/"],             "include_prefix": "osal/" },
-    "osal_port":        { "paths": ["src/osal/port/"] },
-    "hal_api":          { "paths": ["src/hal_api/"],          "include_prefix": "hal_api/" },
-    "drivers":          { "paths": ["src/drivers/"],          "include_prefix": "drivers/" },
-    "framework":        { "paths": ["src/framework/"],        "include_prefix": "framework/" },
-    "framework_public": { "paths": ["src/framework/include/"] },
-    "apps":             { "paths": ["src/apps/"],             "include_prefix": "apps/" },
-    "platform":         { "paths": ["platform/"] }
+    "common": {
+      "paths": [
+        "src/common/"
+      ],
+      "include_prefix": "common/"
+    },
+    "mcal": {
+      "paths": [
+        "src/mcal/"
+      ],
+      "include_prefix": "mcal/"
+    },
+    "osal": {
+      "paths": [
+        "src/osal/"
+      ],
+      "include_prefix": "osal/"
+    },
+    "osal_port": {
+      "paths": [
+        "src/osal/port/"
+      ]
+    },
+    "hal_api": {
+      "paths": [
+        "src/hal_api/"
+      ],
+      "include_prefix": "hal_api/"
+    },
+    "drivers": {
+      "paths": [
+        "src/drivers/"
+      ],
+      "include_prefix": "drivers/"
+    },
+    "framework": {
+      "paths": [
+        "src/framework/"
+      ],
+      "include_prefix": "framework/"
+    },
+    "framework_public": {
+      "paths": [
+        "src/framework/include/"
+      ]
+    },
+    "runtime": {
+      "paths": [
+        "src/runtime/"
+      ],
+      "include_prefix": "runtime/"
+    },
+    "runtime_public": {
+      "paths": [
+        "src/runtime/include/"
+      ]
+    },
+    "apps": {
+      "paths": [
+        "src/apps/"
+      ],
+      "include_prefix": "apps/"
+    },
+    "platform": {
+      "paths": [
+        "platform/"
+      ]
+    }
   },
   "external": {
-    "lvgl": ["lvgl.h", "lvgl/"]
+    "lvgl": [
+      "lvgl.h",
+      "lvgl/"
+    ],
+    "lua": [
+      "lua.h",
+      "lua.hpp",
+      "lauxlib.h",
+      "lualib.h",
+      "luaconf.h"
+    ]
   },
   "allow": {
-    "common":           ["std", "common"],
-    "mcal":             ["std", "common", "mcal"],
-    "osal":             ["std", "common", "osal"],
-    "osal_port":        ["std", "common", "osal", "vendor"],
-    "hal_api":          ["std", "common", "hal_api"],
-    "drivers":          ["std", "common", "mcal", "osal", "hal_api", "drivers"],
-    "framework":        ["std", "common", "osal", "hal_api", "framework", "lvgl"],
-    "framework_public": ["std", "common", "framework", "lvgl"],
-    "apps":             ["std", "common", "framework", "apps", "lvgl"],
-    "platform":         ["*"]
+    "common": [
+      "std",
+      "common"
+    ],
+    "mcal": [
+      "std",
+      "common",
+      "mcal"
+    ],
+    "osal": [
+      "std",
+      "common",
+      "osal"
+    ],
+    "osal_port": [
+      "std",
+      "common",
+      "osal",
+      "vendor"
+    ],
+    "hal_api": [
+      "std",
+      "common",
+      "hal_api"
+    ],
+    "drivers": [
+      "std",
+      "common",
+      "mcal",
+      "osal",
+      "hal_api",
+      "drivers"
+    ],
+    "framework": [
+      "std",
+      "common",
+      "osal",
+      "hal_api",
+      "framework",
+      "lvgl"
+    ],
+    "framework_public": [
+      "std",
+      "common",
+      "framework",
+      "lvgl"
+    ],
+    "runtime": [
+      "std",
+      "common",
+      "osal",
+      "hal_api",
+      "framework",
+      "runtime",
+      "lvgl",
+      "lua"
+    ],
+    "runtime_public": [
+      "std",
+      "common",
+      "runtime"
+    ],
+    "apps": [
+      "std",
+      "common",
+      "framework",
+      "runtime",
+      "apps",
+      "lvgl"
+    ],
+    "platform": [
+      "*"
+    ]
   },
   "banned_patterns": {
     "$comment": "Áp cho mọi file trong src/ (sau khi bỏ comment/chuỗi). Platform được miễn.",

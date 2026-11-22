@@ -1,5 +1,6 @@
-# L5 Applications: CHỈ phụ thuộc framework + LVGL. Không HAL, không driver, không SDK chip.
-idf_component_register(SRCS "src/builtin_apps.cpp"
+# L5 Applications: CHỈ phụ thuộc framework + runtime (API public) + LVGL. Không HAL, không driver, không SDK chip.
+idf_component_register(SRCS "src/app_store_app.cpp"
+                            "src/builtin_apps.cpp"
                             "src/launcher_app.cpp"
                             "src/settings_app.cpp"
                             "src/stopwatch_app.cpp"
@@ -9,6 +10,6 @@ idf_component_register(SRCS "src/builtin_apps.cpp"
                        INCLUDE_DIRS "include"
                        PRIV_INCLUDE_DIRS "src"
                        REQUIRES common framework
-                       PRIV_REQUIRES lvgl__lvgl)
+                       PRIV_REQUIRES lvgl__lvgl runtime)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE ${OS_STRICT_FLAGS})

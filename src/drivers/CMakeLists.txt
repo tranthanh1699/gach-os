@@ -2,6 +2,7 @@
 idf_component_register(SRCS "src/ili9341.cpp"
                             "src/xpt2046.cpp"
                             "src/pwm_backlight.cpp"
+                            "src/soft_spi.cpp"
                        INCLUDE_DIRS "include"
                        REQUIRES common mcal osal hal_api)
 

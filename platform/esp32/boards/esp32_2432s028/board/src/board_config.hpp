@@ -47,10 +47,12 @@ constexpr drivers::Ili9341Config DISPLAY{
 constexpr esp32_mcal::PwmConfig BACKLIGHT_PWM{GPIO_NUM_21, LEDC_TIMER_0, LEDC_CHANNEL_0, 5000U, LEDC_TIMER_10_BIT};
 constexpr bool BACKLIGHT_ACTIVE_HIGH = true;
 
-// ---- Touch: XPT2046 trên VSPI (bus riêng, không DMA, clock thấp) ----
-constexpr esp32_mcal::SpiBusConfig TOUCH_BUS{
-    SPI3_HOST, GPIO_NUM_25 /*SCLK*/, GPIO_NUM_32 /*MOSI*/, GPIO_NUM_39 /*MISO*/, 64U, false /*no DMA*/};
-constexpr esp32_mcal::SpiDeviceConfig TOUCH_DEVICE{GPIO_NUM_33 /*CS*/, 1U * 1000U * 1000U, 0U, false};
+// ---- Touch: XPT2046 trên SPI MỀM (bit-bang) ----
+// ESP32 chỉ có 2 bus SPI phần cứng: SPI2 cho LCD, SPI3 nhường cho thẻ SD (chân native của khe SD).
+constexpr gpio_num_t TOUCH_SCLK = GPIO_NUM_25;
+constexpr gpio_num_t TOUCH_MOSI = GPIO_NUM_32;
+constexpr gpio_num_t TOUCH_MISO = GPIO_NUM_39; // Input-only.
+constexpr gpio_num_t TOUCH_CS = GPIO_NUM_33;
 // T_IRQ = GPIO36 (input-only, không có pull-up nội) -> không dùng, phát hiện chạm bằng áp lực Z.
 
 constexpr drivers::Xpt2046Config TOUCH{
@@ -59,6 +61,15 @@ constexpr drivers::Xpt2046Config TOUCH{
     // Đo trên board TPM408-2.8 với (invert_x=false, invert_y=true): chạm trên-trái -> (319, 39)
     // => X ngược, Y đúng chiều.
     true /*swap_xy*/, true /*invert_x*/, true /*invert_y*/, 300U /*z_threshold*/};
+
+// ---- Thẻ microSD: SPI3 (VSPI) ----
+constexpr esp32_mcal::SpiBusConfig SD_BUS{
+    SPI3_HOST, GPIO_NUM_18 /*SCLK*/, GPIO_NUM_23 /*MOSI*/, GPIO_NUM_19 /*MISO*/, 4096U, true /*DMA*/};
+constexpr gpio_num_t SD_CS = GPIO_NUM_5;
+
+// ---- Vùng RAM cho máy ảo app cài thêm (Lua) ----
+// Board không có PSRAM: 64 KiB RAM nội, cấp một lần lúc boot (trước Wi-Fi để chắc có khối liên tục).
+constexpr size_t APP_ARENA_BYTES = 64U * 1024U;
 
 } // namespace cfg
 } // namespace board

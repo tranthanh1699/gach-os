@@ -9,6 +9,7 @@
 #define FRAMEWORK_APP_MANAGER_HPP
 
 #include <cstddef>
+#include <cstdint>
 
 #include "common/non_copyable.hpp"
 #include "common/status.hpp"
@@ -32,6 +33,18 @@ public:
 
     /** @brief Đăng ký app (pha khởi tạo). @return ERR_FULL nếu vượt config::MAX_APPS. */
     common::Status register_app(App& app);
+
+    /**
+     * @brief Gỡ đăng ký app (app nạp động bị gỡ cài đặt).
+     * @return ERR_PARAM (không tồn tại / là home), ERR_STATE (đang nằm trong back-stack).
+     */
+    common::Status unregister_app(const char* p_id);
+
+    /** @return Bộ đếm tăng mỗi khi danh sách app đăng ký thay đổi (launcher dùng để dựng lại lưới). */
+    uint32_t registry_generation() const { return m_registry_generation; }
+
+    /** @return App theo id, NULL nếu không tồn tại. */
+    App* find(const char* p_id) const;
 
     /** @brief Chọn app home (đáy back-stack, không bao giờ bị đóng). */
     common::Status set_home(const char* p_id);
@@ -70,15 +83,17 @@ private:
         lv_obj_t* p_root;
     };
 
-    App* find(const char* p_id) const;
     common::Status push(App& app);
     void pop_top();
+    void remove_at(size_t index);
+    void close_other_exclusive(const App& app);
     void resume_top();
     void notify_foreground();
 
     Context m_context;
     App* m_p_apps[config::MAX_APPS];
     size_t m_app_count;
+    uint32_t m_registry_generation;
     App* m_p_home;
     StackEntry m_stack[config::MAX_APP_STACK];
     size_t m_stack_depth;

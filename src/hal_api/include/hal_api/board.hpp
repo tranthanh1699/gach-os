@@ -11,12 +11,19 @@
 #include "hal_api/backlight.hpp"
 #include "hal_api/clock.hpp"
 #include "hal_api/display.hpp"
+#include "hal_api/filesystem.hpp"
 #include "hal_api/storage.hpp"
 #include "hal_api/system.hpp"
 #include "hal_api/touch.hpp"
 #include "hal_api/wifi.hpp"
 
 namespace hal {
+
+/** @brief Vùng nhớ liên tục do board cấp (board chọn RAM nội hay PSRAM tùy phần cứng). */
+struct MemoryRegion {
+    void* p_base;
+    size_t size;
+};
 
 /** @brief Tập thiết bị mà board cung cấp cho OS. Con trỏ NULL = board không có thiết bị đó. */
 struct Devices {
@@ -28,6 +35,8 @@ struct Devices {
     IKeyValueStore* p_storage; /**< Tùy chọn: lưu cài đặt. */
     IWifi* p_wifi;            /**< Tùy chọn. */
     IClock* p_clock;          /**< Tùy chọn: giờ thực (SNTP). */
+    IFileSystem* p_fs;        /**< Tùy chọn: bộ nhớ ngoài chứa app cài thêm (thẻ SD). */
+    MemoryRegion app_arena;   /**< Vùng RAM dành riêng cho máy ảo app cài thêm ({nullptr,0} = không hỗ trợ). */
 };
 
 /**

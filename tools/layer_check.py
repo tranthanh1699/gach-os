@@ -163,7 +163,7 @@ class LayerChecker:
 
 
 def print_matrix(matrix: dict) -> None:
-    targets = ["std", "common", "mcal", "osal", "hal_api", "drivers", "framework", "apps", "lvgl", "vendor"]
+    targets = ["std", "common", "mcal", "osal", "hal_api", "drivers", "framework", "runtime", "apps", "lvgl", "lua", "vendor"]
     print("| From \\ To | " + " | ".join(targets) + " |")
     print("| :--- |" + " :---: |" * len(targets))
     for layer, allowed in matrix["allow"].items():

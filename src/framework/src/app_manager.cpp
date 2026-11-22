@@ -9,7 +9,8 @@
 namespace fw {
 
 AppManager::AppManager(Services& services)
-    : m_context{*this, services}, m_p_apps{}, m_app_count(0U), m_p_home(nullptr), m_stack{}, m_stack_depth(0U),
+    : m_context{*this, services}, m_p_apps{}, m_app_count(0U), m_registry_generation(0U), m_p_home(nullptr),
+      m_stack{}, m_stack_depth(0U),
       m_p_content(nullptr), m_p_listener(nullptr)
 {
 }
@@ -25,6 +26,32 @@ common::Status AppManager::register_app(App& app)
     app.m_p_context = &m_context;
     m_p_apps[m_app_count] = &app;
     m_app_count++;
+    m_registry_generation++;
+    return common::Status::OK;
+}
+
+common::Status AppManager::unregister_app(const char* p_id)
+{
+    App* const p_app = find(p_id);
+    if ((p_app == nullptr) || (p_app == m_p_home)) {
+        return common::Status::ERR_PARAM;
+    }
+    for (size_t index = 0U; index < m_stack_depth; ++index) {
+        if (m_stack[index].p_app == p_app) {
+            return common::Status::ERR_STATE;
+        }
+    }
+    size_t slot = 0U;
+    while (m_p_apps[slot] != p_app) {
+        ++slot;
+    }
+    for (; (slot + 1U) < m_app_count; ++slot) {
+        m_p_apps[slot] = m_p_apps[slot + 1U];
+    }
+    m_app_count--;
+    m_p_apps[m_app_count] = nullptr;
+    p_app->m_p_context = nullptr;
+    m_registry_generation++;
     return common::Status::OK;
 }
 
@@ -74,7 +101,28 @@ common::Status AppManager::launch(const char* p_id)
             return common::Status::OK;
         }
     }
+    close_other_exclusive(*p_app);
     return push(*p_app);
+}
+
+void AppManager::close_other_exclusive(const App& app)
+{
+    if (!app.info().exclusive) {
+        return;
+    }
+    bool removed_top = false;
+    // Duyệt ngược để chỉ số phía dưới không bị dịch khi xóa.
+    for (size_t index = m_stack_depth; index > 1U; --index) {
+        const StackEntry& entry = m_stack[index - 1U];
+        if ((entry.p_app != &app) && entry.p_app->info().exclusive) {
+            removed_top = removed_top || (index == m_stack_depth);
+            remove_at(index - 1U);
+        }
+    }
+    if (removed_top) {
+        // Đỉnh mới đang paused: resume để push() pause lại đúng vòng đời (không pause hai lần).
+        resume_top();
+    }
 }
 
 void AppManager::back()
@@ -149,6 +197,23 @@ void AppManager::pop_top()
     // Xóa bất đồng bộ: an toàn khi back() được gọi từ chính event callback của app.
     lv_obj_delete_async(top.p_root);
     top = StackEntry{nullptr, nullptr};
+}
+
+void AppManager::remove_at(size_t index)
+{
+    if (index + 1U == m_stack_depth) {
+        pop_top();
+        return;
+    }
+    // App giữa stack đang ở trạng thái paused: chỉ cần destroy rồi dồn stack.
+    StackEntry& entry = m_stack[index];
+    entry.p_app->on_destroy();
+    lv_obj_delete_async(entry.p_root);
+    for (size_t slot = index; (slot + 1U) < m_stack_depth; ++slot) {
+        m_stack[slot] = m_stack[slot + 1U];
+    }
+    m_stack_depth--;
+    m_stack[m_stack_depth] = StackEntry{nullptr, nullptr};
 }
 
 void AppManager::resume_top()

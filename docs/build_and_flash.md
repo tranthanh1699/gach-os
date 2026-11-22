@@ -86,7 +86,14 @@ cd build/esp32_2432s028
 python3 -m esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 write_flash @flash_args
 ```
 
-## 4. Lệnh khác
+## 4. Thẻ SD và app cài thêm
+
+- Thẻ microSD định dạng **FAT32**, cắm trước khi bật nguồn. Log boot có `sd=yes`.
+- OS tự tạo thư mục `/install` (chép gói `.gapp` vào đây) và `/apps` (app đã cài) trên thẻ.
+- Đóng gói app: `python3 tools/gapp_pack.py examples/apps/counter`, rồi chép `build/gapp/*.gapp` vào `/install`.
+- Log boot sẽ có dòng `main: Runtime: ready, N package(s)`. Chi tiết: [docs/sdk.md](sdk.md).
+
+## 5. Lệnh khác
 
 | Lệnh | Tác dụng |
 | :--- | :--- |
@@ -101,7 +108,7 @@ python3 -m esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 write_flash @flash_arg
 
 > Sửa `sdkconfig.defaults` (chung hoặc của board) sẽ **không** được áp vào build cũ → chạy `./build.sh fullclean` rồi build lại.
 
-## 5. Xử lý sự cố
+## 6. Xử lý sự cố
 
 | Triệu chứng | Nguyên nhân / Cách xử lý |
 | :--- | :--- |
@@ -115,4 +122,6 @@ python3 -m esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 write_flash @flash_arg
 | Chạm lệch / ngược trục | Mở app **Touch**, so tọa độ hiển thị với vị trí chạm; chỉnh `swap_xy`, `invert_x/y`, `raw_*_min/max` trong `TOUCH`. |
 | Màn hình tối hẳn | Xem log: nếu có `Backlight PWM unavailable` thì GPIO21 bị chiếm/sai. |
 | Reset liên tục, log có `abort()` từ `board` | Lỗi init LCD SPI – dòng `E (...) board: ... failed` cho biết bước nào. |
+| Log `SD card unavailable`, app **Apps** báo `No SD card` | Thẻ chưa cắm, không phải FAT32, hoặc lỏng tiếp xúc. Cắm lại thẻ rồi khởi động lại. |
+| App cài thêm hiện **App error** | Lỗi trong mã Lua của app: thông báo hiện ngay trên màn hình và trong log serial (`[<id>] script error: ...`). |
 | Backtrace khi crash | `monitor` tự giải mã nhờ `gach_os.elf`; luôn mở monitor từ `./build.sh` để có symbol. |

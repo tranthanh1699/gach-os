@@ -4,7 +4,9 @@
 
 ```mermaid
 flowchart TD
-    APPS["L5 apps/<br/>Launcher, Wi-Fi, Settings, System, Touch, Stopwatch"]
+    APPS["L5 apps/<br/>Launcher, Wi-Fi, Apps, Settings, System, Touch, Stopwatch"]
+    RT["L4.5 runtime/<br/>Gói .gapp · máy ảo Lua · gach SDK"]
+    GAPP[["App cài thêm (.gapp, Lua)"]]
     FW["L4 framework/<br/>AppManager · Shell · Services (Wifi, Time) · LVGL port · Theme"]
     LVGL[["LVGL 9 (thư viện ngoài)"]]
     HAL["L2 hal_api/<br/>IDisplay · ITouch · IBacklight · ISystem<br/>IWifi · IClock · IKeyValueStore · board_init()"]
@@ -15,7 +17,12 @@ flowchart TD
     PLAT["platform/&lt;chip&gt;/<br/>MCAL + Wi-Fi/SNTP/NVS (ESP-IDF) · boards/&lt;board&gt; · main"]
 
     APPS --> FW
+    APPS --> RT
     APPS --> LVGL
+    GAPP -. gach SDK .-> RT
+    RT --> FW
+    RT --> HAL
+    RT --> LVGL
     FW --> LVGL
     FW --> HAL
     FW --> OSAL
@@ -29,7 +36,8 @@ flowchart TD
 
 | Tầng | Thư mục | Trách nhiệm | Biết về chip? |
 | :--- | :--- | :--- | :---: |
-| L5 apps | `src/apps` | Ứng dụng người dùng, chỉ dùng `fw::` + LVGL | ❌ |
+| L5 apps | `src/apps` | Ứng dụng tích hợp, chỉ dùng `fw::`, `runtime::` (API public) + LVGL | ❌ |
+| L4.5 runtime | `src/runtime` | Cài/gỡ gói `.gapp`, máy ảo Lua (arena RAM riêng), bindings gach SDK | ❌ |
 | L4 framework | `src/framework` | Vòng đời app, back-stack, system UI, dịch vụ hệ thống, cầu LVGL | ❌ |
 | L3 drivers | `src/drivers` | Driver IC (panel, touch, backlight) trên MCAL contract | ❌ |
 | L2 hal_api | `src/hal_api` | Contract thiết bị theo lớp (display/touch/...) + điểm DI `board_init()` | ❌ |
@@ -41,20 +49,22 @@ flowchart TD
 
 Nguồn sự thật: [`tools/layer_matrix.json`](../tools/layer_matrix.json). In lại bảng: `python3 tools/layer_check.py --print-matrix`.
 
-| From \ To | std | common | mcal | osal | hal_api | drivers | framework | apps | lvgl | vendor (SDK) |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **common** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **mcal** | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **osal** | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **osal_port** | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
-| **hal_api** | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **drivers** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **framework** | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
-| **framework_public** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
-| **apps** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |
-| **platform** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| From \ To | std | common | mcal | osal | hal_api | drivers | framework | runtime | apps | lvgl | lua | vendor |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **common** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **mcal** | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **osal** | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **osal_port** | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **hal_api** | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **drivers** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **framework** | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **framework_public** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ |
+| **runtime** | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ |
+| **runtime_public** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **apps** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| **platform** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-`framework_public` = header trong `src/framework/include/`: không được lộ HAL/OSAL để app không thể chạm phần cứng gián tiếp.
+`framework_public` / `runtime_public` = header public của tầng đó: không được lộ HAL/OSAL/Lua để app không thể chạm phần cứng hay máy ảo gián tiếp. Header Lua chỉ được include trong `src/runtime/src`.
 
 ### Ba lớp cưỡng chế
 
@@ -101,7 +111,25 @@ Shell / app ◄── fw::TimeService::now(): UTC + múi giờ (mặc định UT
 - Chưa đồng bộ NTP → status bar hiển thị `--:--` (không hiển thị giờ sai).
 - Chuyển epoch → ngày giờ bằng thuật toán thuần (`fw::epoch_to_datetime`), không phụ thuộc libc/TZ của chip.
 
-## 5. Mô hình ứng dụng
+## 5. App cài thêm (runtime)
+
+```
+Thẻ SD: install/*.gapp ──(boot hoặc app "Apps")──► kiểm tra manifest ─► giải nén ─► apps/<id>/
+                                                                                      │ đăng ký slot ScriptApp
+Launcher ──launch──► ScriptApp (fw::App, exclusive) ──► ScriptHost: lua_newstate trên arena 64 KiB
+                                                          ├─ gach.ui / timer / sys / storage / app
+                                                          ├─ handle số nguyên ↔ lv_obj_t* (không lộ con trỏ)
+                                                          ├─ ngân sách 500 ms/lần gọi (hook đếm lệnh)
+                                                          └─ lỗi ⇒ màn hình "App error", đóng VM, OS vẫn chạy
+```
+
+- **Gói** = tar ustar không nén + `manifest.ini`; chặn đường dẫn tuyệt đối/`..` (zip-slip).
+- **Bộ nhớ**: Lua chỉ cấp phát trong arena do board giao (`hal::Devices::app_arena`, board có PSRAM có thể cấp lớn hơn); đóng app = reset arena, không rò rỉ.
+- **Exclusive**: chỉ một máy ảo ⇒ mở app script khác sẽ đóng app script đang nằm trong back-stack (`fw::AppInfo::exclusive`).
+- **Hợp đồng ổn định**: app chỉ thấy gach SDK (version trong `runtime/sdk_version.hpp`), không thấy LVGL ⇒ nâng LVGL/đổi chip không làm vỡ app trên kho.
+- Đặc tả cho người viết app: [docs/sdk.md](sdk.md).
+
+## 6. Mô hình ứng dụng
 
 - `fw::App` ≈ Activity của Android: `on_create(p_root) → on_resume ↔ on_pause → on_destroy`, `on_back()` trả `true` nếu tự xử lý.
 - Back-stack tối đa `config::MAX_APP_STACK` (gồm Home). `launch()` app đã có trong stack sẽ quay về app đó.
@@ -113,7 +141,7 @@ Shell / app ◄── fw::TimeService::now(): UTC + múi giờ (mặc định UT
 2. Thêm instance tĩnh vào mảng `s_apps` trong `builtin_apps.cpp`, thêm `.cpp` vào `src/apps/CMakeLists.txt`.
 3. `./build.sh` (layer check tự chạy).
 
-## 6. Port sang chip / board mới
+## 7. Port sang chip / board mới
 
 | Việc | Chạm vào | Không chạm |
 | :--- | :--- | :--- |

@@ -17,27 +17,62 @@ constexpr int32_t ICON_SIZE = 52;
 constexpr int32_t ICON_RADIUS = 14;
 constexpr int32_t GRID_GAP = 6;
 constexpr int32_t TILE_ROW_GAP = 4;
+constexpr uint32_t REGISTRY_CHECK_MS = 1000U; // App có thể được cài/gỡ khi launcher đang hiển thị.
 
 } // namespace
 
-LauncherApp::LauncherApp() : fw::App(INFO) {}
+LauncherApp::LauncherApp() : fw::App(INFO), m_p_root(nullptr), m_p_timer(nullptr), m_built_generation(0U) {}
 
 void LauncherApp::on_create(lv_obj_t* p_root)
 {
+    m_p_root = p_root;
     lv_obj_set_style_pad_all(p_root, GRID_GAP, 0);
     lv_obj_set_style_pad_row(p_root, GRID_GAP, 0);
     lv_obj_set_style_pad_column(p_root, GRID_GAP, 0);
     lv_obj_set_flex_flow(p_root, LV_FLEX_FLOW_ROW_WRAP);
     lv_obj_set_flex_align(p_root, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     lv_obj_set_scroll_dir(p_root, LV_DIR_VER);
+    build_grid();
+}
 
+void LauncherApp::on_resume()
+{
+    refresh_if_changed();
+    m_p_timer = lv_timer_create(&LauncherApp::on_timer, REGISTRY_CHECK_MS, this);
+}
+
+void LauncherApp::on_pause()
+{
+    if (m_p_timer != nullptr) {
+        lv_timer_delete(m_p_timer);
+        m_p_timer = nullptr;
+    }
+}
+
+void LauncherApp::refresh_if_changed()
+{
+    // Danh sách app đổi (cài/gỡ) -> dựng lại lưới (tile giữ con trỏ App, không được để treo).
+    if (context().apps.registry_generation() != m_built_generation) {
+        build_grid();
+    }
+}
+
+void LauncherApp::on_timer(lv_timer_t* p_timer)
+{
+    static_cast<LauncherApp*>(lv_timer_get_user_data(p_timer))->refresh_if_changed();
+}
+
+void LauncherApp::build_grid()
+{
+    lv_obj_clean(m_p_root);
     fw::AppManager& apps = context().apps;
     for (size_t index = 0U; index < apps.count(); ++index) {
         fw::App* const p_app = apps.at(index);
         if ((p_app != nullptr) && p_app->info().show_in_launcher) {
-            create_tile(p_root, *p_app);
+            create_tile(m_p_root, *p_app);
         }
     }
+    m_built_generation = apps.registry_generation();
 }
 
 void LauncherApp::create_tile(lv_obj_t* p_parent, fw::App& target)
