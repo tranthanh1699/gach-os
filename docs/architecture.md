@@ -1,0 +1,107 @@
+# Kiến trúc esp32-os
+
+## 1. Các tầng
+
+```mermaid
+flowchart TD
+    APPS["L5 apps/<br/>Launcher, Settings, System, Touch, Stopwatch"]
+    FW["L4 framework/<br/>AppManager · Shell · Services · LVGL port · Theme"]
+    LVGL[["LVGL 9 (thư viện ngoài)"]]
+    HAL["L2 hal_api/<br/>IDisplay · ITouch · IBacklight · ISystem · board_init()"]
+    DRV["L3 drivers/<br/>Ili9341 · Xpt2046 · PwmBacklight"]
+    MCAL["L1 mcal/<br/>ISpiDevice · IGpio* · IPwmChannel"]
+    OSAL["L1 osal/<br/>Task · Mutex · tick/delay"]
+    COMMON["L0 common/<br/>Status · NonCopyable"]
+    PLAT["platform/&lt;chip&gt;/<br/>MCAL impl (ESP-IDF) · boards/&lt;board&gt; · main"]
+
+    APPS --> FW
+    APPS --> LVGL
+    FW --> LVGL
+    FW --> HAL
+    FW --> OSAL
+    DRV -. implements .-> HAL
+    DRV --> MCAL
+    DRV --> OSAL
+    PLAT -. implements .-> MCAL
+    PLAT -->|compose & inject| DRV
+    PLAT -->|board_init → fw::start| FW
+```
+
+| Tầng | Thư mục | Trách nhiệm | Biết về chip? |
+| :--- | :--- | :--- | :---: |
+| L5 apps | `src/apps` | Ứng dụng người dùng, chỉ dùng `fw::` + LVGL | ❌ |
+| L4 framework | `src/framework` | Vòng đời app, back-stack, system UI, dịch vụ hệ thống, cầu LVGL | ❌ |
+| L3 drivers | `src/drivers` | Driver IC (panel, touch, backlight) trên MCAL contract | ❌ |
+| L2 hal_api | `src/hal_api` | Contract thiết bị theo lớp (display/touch/...) + điểm DI `board_init()` | ❌ |
+| L1 mcal / osal | `src/mcal`, `src/osal` | Contract ngoại vi (SPI/GPIO/PWM) và RTOS | ❌ (osal/port: ✅) |
+| L0 common | `src/common` | Kiểu dùng chung | ❌ |
+| platform | `platform/<chip>` | Hiện thực MCAL bằng SDK chip, board composition, entry point, build | ✅ |
+
+## 2. Ma trận phụ thuộc (Layer Matrix)
+
+Nguồn sự thật: [`tools/layer_matrix.json`](../tools/layer_matrix.json). In lại bảng: `python3 tools/layer_check.py --print-matrix`.
+
+| From \ To | std | common | mcal | osal | hal_api | drivers | framework | apps | lvgl | vendor (SDK) |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **common** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **mcal** | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **osal** | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **osal_port** | ✅ | ✅ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| **hal_api** | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **drivers** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **framework** | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| **framework_public** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ❌ | ✅ | ❌ |
+| **apps** | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ | ✅ | ❌ |
+| **platform** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+`framework_public` = header trong `src/framework/include/`: không được lộ HAL/OSAL để app không thể chạm phần cứng gián tiếp.
+
+### Ba lớp cưỡng chế
+
+1. **Static check** – `tools/layer_check.py` (chạy tự động trong `./build.sh` và CI): kiểm tra mọi `#include` theo ma trận + chặn mẫu cấm (`new/malloc`, `std::vector`, `throw`, `dynamic_cast`, `sprintf`...).
+2. **Build system** – mỗi tầng là một ESP-IDF component; `REQUIRES/PRIV_REQUIRES` phản chiếu đúng ma trận nên include sai tầng không có trong include path → lỗi biên dịch. Ví dụ `framework` để `hal_api` ở `PRIV_REQUIRES` nên `apps` không thấy HAL.
+3. **Type system** – app chỉ nhận `fw::Context` (AppManager + Services). `fw::Services` trả `fw::DeviceInfo` thay vì kiểu HAL.
+
+> ESP-IDF tự thêm "common requirements" (freertos, esp_log...) vào mọi component nên lớp 2 không chặn được include SDK — lớp 1 bù đúng lỗ hổng này.
+
+## 3. Luồng khởi động
+
+```
+app_main()                                   platform/esp32/main/main.cpp
+ ├─ hal::board_init()                        boards/<board>/board/src/board.cpp
+ │   ├─ MCAL: SPI bus/device, GPIO, LEDC     components/esp32_mcal
+ │   └─ Drivers: Ili9341, Xpt2046, PwmBacklight (inject MCAL)
+ ├─ apps::register_builtin_apps(fw::app_manager())
+ └─ fw::start(devices)                       tạo UI task (12 KiB) rồi chờ semaphore (timeout 5 s)
+     └─ [UI task] dưới UI lock:
+         ├─ display.init(), touch.init()
+         ├─ LvglPort: lv_display (partial 24 KiB) + lv_indev + tick = osal::tick_ms
+         ├─ Shell: status bar | content | nav bar (Back, Home)
+         ├─ AppManager.start() → mở Launcher
+         ├─ vẽ khung đầu → bật backlight → give semaphore (fw::start trả kết quả)
+         └─ vòng lv_timer_handler()
+```
+
+> Mọi lời gọi LVGL (kể cả khởi tạo) chỉ diễn ra trong UI task. Task khác muốn chạm LVGL phải giữ `fw::UiLock`.
+
+## 4. Mô hình ứng dụng
+
+- `fw::App` ≈ Activity của Android: `on_create(p_root) → on_resume ↔ on_pause → on_destroy`, `on_back()` trả `true` nếu tự xử lý.
+- Back-stack tối đa `config::MAX_APP_STACK` (gồm Home). `launch()` app đã có trong stack sẽ quay về app đó.
+- App được cấp phát tĩnh, đăng ký trong `src/apps/src/builtin_apps.cpp`.
+
+### Thêm app mới
+
+1. `src/apps/src/foo_app.hpp/.cpp` kế thừa `fw::App`, khai báo `constexpr fw::AppInfo`.
+2. Thêm instance tĩnh vào mảng `s_apps` trong `builtin_apps.cpp`, thêm `.cpp` vào `src/apps/CMakeLists.txt`.
+3. `./build.sh` (layer check tự chạy).
+
+## 5. Port sang chip / board mới
+
+| Việc | Chạm vào | Không chạm |
+| :--- | :--- | :--- |
+| Board mới cùng họ ESP32 (VD: ESP32-S3 + ST7789) | `platform/esp32/boards/<board>/` (board.env, sdkconfig.defaults, `board/`), driver mới trong `src/drivers` nếu IC mới | framework, apps |
+| Họ chip mới (VD: STM32, RP2040) | `platform/<chip>/`: MCAL impl, `build.sh`, entry point, board; osal port nếu không phải FreeRTOS | `src/` (trừ thêm port osal) |
+| Màn hình kích thước khác | `Ili9341Config`/driver mới + `board_config.hpp` | Shell/Launcher tự co giãn theo `IDisplay::width/height` |
+
+Hợp đồng tối thiểu cho platform mới: hiện thực `mcal::*` cần dùng, `hal::ISystem`, `hal::board_init()`, OSAL port, và script `platform/<chip>/build.sh <board> <action>`.

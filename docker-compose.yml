@@ -1,0 +1,19 @@
+# Shell tương tác trong môi trường ESP-IDF:
+#   docker compose run --rm idf                 # bash
+#   docker compose run --rm idf ./build.sh -n   # build native bên trong container
+services:
+  idf:
+    build:
+      context: docker
+      dockerfile: Dockerfile
+    image: esp32-os-idf:latest
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /project
+    environment:
+      - HOME=/tmp
+      - CCACHE_DIR=/project/build/.ccache
+    volumes:
+      - .:/project
+    # Bỏ comment để flash từ container:
+    # devices:
+    #   - /dev/ttyUSB0:/dev/ttyUSB0

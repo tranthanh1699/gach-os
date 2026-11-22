@@ -1,0 +1,48 @@
+name: esp32-os CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  layer-check:
+    name: Layer matrix & banned patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unit test checker
+        run: python3 -m unittest tools/test_layer_check.py -v
+      - name: Layer check
+        run: python3 tools/layer_check.py
+
+  build:
+    name: Build ${{ matrix.board }}
+    needs: layer-check
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.4.1
+    strategy:
+      matrix:
+        board: [esp32_2432s028]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build firmware
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          ./build.sh --native --board "${{ matrix.board }}" build
+          ./build.sh --native --board "${{ matrix.board }}" size
+      - uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.board }}
+          path: |
+            build/${{ matrix.board }}/*.bin
+            build/${{ matrix.board }}/*.elf
+            build/${{ matrix.board }}/bootloader/bootloader.bin
+            build/${{ matrix.board }}/partition_table/partition-table.bin
+            build/${{ matrix.board }}/flasher_args.json
+          if-no-files-found: error

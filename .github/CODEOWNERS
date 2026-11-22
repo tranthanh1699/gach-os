@@ -1,0 +1,4 @@
+# Global Code Owner for esp32-os
+# Require @pempem98 review for all pull requests into protected branches
+
+* @pempem98

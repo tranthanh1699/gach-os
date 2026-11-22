@@ -1,0 +1,7 @@
+# Build context chỉ là thư mục docker/ – file này phòng khi build từ gốc repo.
+build/
+platform/*/build/
+platform/*/managed_components/
+.git/
+.agent/
+.vscode/

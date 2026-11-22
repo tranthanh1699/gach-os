@@ -1,0 +1,22 @@
+# Build output (mọi board)
+build/
+platform/*/build/
+sdkconfig
+sdkconfig.old
+platform/*/sdkconfig
+platform/*/sdkconfig.old
+
+# ESP-IDF component manager
+managed_components/
+platform/*/managed_components/
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE / OS
+.cache/
+.clangd
+*.swp
+.DS_Store
+Thumbs.db

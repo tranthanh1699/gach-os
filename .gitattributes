@@ -1,0 +1,32 @@
+# Auto detect text files and perform LF normalization on check-in
+* text=auto
+
+# Explicitly declare text files you want to always be normalized to LF in repo
+*.c text
+*.h text
+*.s text
+*.cpp text
+*.hpp text
+*.cmake text
+*.txt text
+*.md text
+*.json text
+*.yml text
+*.yaml text
+*.dockerignore text
+*.gitignore text
+
+*.sh text eol=lf
+*.py text eol=lf
+*.csv text
+sdkconfig.defaults text
+*.env text eol=lf
+
+# Declare binary files
+*.bin binary
+*.hex binary
+*.elf binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.pdf binary
