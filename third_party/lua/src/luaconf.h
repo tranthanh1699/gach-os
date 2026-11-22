@@ -115,17 +115,17 @@
 
 
 /* Default configuration ('long long' and 'double', for 64-bit Lua) */
+/* gach-os patch: cho phép chọn kiểu số nguyên qua -DLUA_INT_DEFAULT (bản gốc cố định LONGLONG). */
+#if !defined(LUA_INT_DEFAULT)
 #define LUA_INT_DEFAULT		LUA_INT_LONGLONG
+#endif
 #define LUA_FLOAT_DEFAULT	LUA_FLOAT_DOUBLE
 
 
 /*
 @@ LUA_32BITS enables Lua with 32-bit integers and 32-bit floats.
 */
-/* gach-os patch: cho phép đặt qua -DLUA_32BITS=1 (bản gốc định nghĩa cứng = 0). */
-#if !defined(LUA_32BITS)
 #define LUA_32BITS	0
-#endif
 
 
 /*

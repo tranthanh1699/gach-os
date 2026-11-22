@@ -8,6 +8,7 @@
 #include "script_host.hpp"
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <initializer_list>
 
@@ -146,6 +147,8 @@ struct ScriptHost::Sdk {
         lv_obj_set_flex_flow(p_box, flow);
         lv_obj_set_style_pad_gap(p_box, CONTAINER_GAP, 0);
         lv_obj_set_flex_align(p_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+        // Container chỉ để bố cục: không nhận chạm, để click rơi xuống nút chứa nó (VD: ký hiệu vẽ trong nút).
+        lv_obj_remove_flag(p_box, LV_OBJ_FLAG_CLICKABLE);
         return p_box;
     }
 
@@ -259,6 +262,130 @@ struct ScriptHost::Sdk {
         luaL_argcheck(p_lua, p_obj != host_of(p_lua)->m_p_root, 1, "cannot delete root");
         lv_obj_delete(p_obj);
         return 0;
+    }
+
+    // ---- gach.ui (SDK v2: bố cục & kiểu dáng) ----
+    /** @brief Độ dài: số pixel, chuỗi "N%" (theo cha) hoặc "content" (vừa nội dung). */
+    static int32_t length_arg(lua_State* p_lua, int arg)
+    {
+        if (lua_type(p_lua, arg) == LUA_TNUMBER) {
+            return static_cast<int32_t>(luaL_checkinteger(p_lua, arg));
+        }
+        size_t len = 0U;
+        const char* const p_text = luaL_checklstring(p_lua, arg, &len);
+        if (std::strcmp(p_text, "content") == 0) {
+            return LV_SIZE_CONTENT;
+        }
+        if ((len > 1U) && (p_text[len - 1U] == '%')) {
+            const long percent = std::strtol(p_text, nullptr, 10);
+            luaL_argcheck(p_lua, (percent >= 0) && (percent <= 100), arg, "percent must be 0..100");
+            return lv_pct(static_cast<int32_t>(percent));
+        }
+        (void)luaL_argerror(p_lua, arg, "expected pixels, \"N%\" or \"content\"");
+        return 0;
+    }
+
+    static int box(lua_State* p_lua)
+    {
+        lv_obj_t* const p_box = lv_obj_create(object(p_lua, 1));
+        lv_obj_remove_style_all(p_box);
+        lv_obj_set_size(p_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+        lv_obj_remove_flag(p_box, LV_OBJ_FLAG_CLICKABLE); // Hình trang trí: click rơi xuống widget cha.
+        lv_obj_remove_flag(p_box, LV_OBJ_FLAG_SCROLLABLE);
+        return push_new(p_lua, p_box, 0, LV_EVENT_ALL);
+    }
+
+    static int set_size(lua_State* p_lua)
+    {
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        if (!lua_isnoneornil(p_lua, 2)) {
+            lv_obj_set_width(p_obj, length_arg(p_lua, 2));
+        }
+        if (!lua_isnoneornil(p_lua, 3)) {
+            lv_obj_set_height(p_obj, length_arg(p_lua, 3));
+        }
+        return 0;
+    }
+
+    static int set_grow(lua_State* p_lua)
+    {
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        const lua_Integer grow = luaL_checkinteger(p_lua, 2);
+        luaL_argcheck(p_lua, (grow >= 0) && (grow <= UINT8_MAX), 2, "grow must be 0..255");
+        lv_obj_set_flex_grow(p_obj, static_cast<uint8_t>(grow));
+        return 0;
+    }
+
+    static int set_bg(lua_State* p_lua)
+    {
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        const auto color = static_cast<uint32_t>(luaL_checkinteger(p_lua, 2));
+        lv_obj_set_style_bg_color(p_obj, lv_color_hex(color), 0);
+        lv_obj_set_style_bg_opa(p_obj, LV_OPA_COVER, 0);
+        lv_obj_set_style_shadow_width(p_obj, 0, 0); // Kiểu phẳng: màu do app quyết định.
+        return 0;
+    }
+
+    static int set_radius(lua_State* p_lua)
+    {
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        int32_t radius = 0;
+        if ((lua_type(p_lua, 2) == LUA_TSTRING) && (std::strcmp(lua_tostring(p_lua, 2), "round") == 0)) {
+            radius = LV_RADIUS_CIRCLE;
+        } else {
+            radius = static_cast<int32_t>(luaL_checkinteger(p_lua, 2));
+        }
+        lv_obj_set_style_radius(p_obj, radius, 0);
+        return 0;
+    }
+
+    static int set_align(lua_State* p_lua)
+    {
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        static const char* const OPTIONS[] = {"left", "center", "right", nullptr};
+        static const lv_text_align_t ALIGNS[] = {LV_TEXT_ALIGN_LEFT, LV_TEXT_ALIGN_CENTER, LV_TEXT_ALIGN_RIGHT};
+        lv_obj_set_style_text_align(p_obj, ALIGNS[luaL_checkoption(p_lua, 2, nullptr, OPTIONS)], 0);
+        return 0;
+    }
+
+    static int center(lua_State* p_lua)
+    {
+        lv_obj_center(object(p_lua, 1));
+        return 0;
+    }
+
+    static int set_pad(lua_State* p_lua)
+    {
+        lv_obj_set_style_pad_all(object(p_lua, 1), static_cast<int32_t>(luaL_checkinteger(p_lua, 2)), 0);
+        return 0;
+    }
+
+    static int set_gap(lua_State* p_lua)
+    {
+        lv_obj_set_style_pad_gap(object(p_lua, 1), static_cast<int32_t>(luaL_checkinteger(p_lua, 2)), 0);
+        return 0;
+    }
+
+    /** @brief gach.ui.SYMBOL: ký hiệu có sẵn trong font hệ thống (chữ không có trong font sẽ hiện ô trống). */
+    static void push_symbols(lua_State* p_lua)
+    {
+        static const struct {
+            const char* p_name;
+            const char* p_glyph;
+        } SYMBOLS[] = {
+            {"PLUS", LV_SYMBOL_PLUS},     {"MINUS", LV_SYMBOL_MINUS},   {"CLOSE", LV_SYMBOL_CLOSE},
+            {"OK", LV_SYMBOL_OK},         {"LEFT", LV_SYMBOL_LEFT},     {"RIGHT", LV_SYMBOL_RIGHT},
+            {"UP", LV_SYMBOL_UP},         {"DOWN", LV_SYMBOL_DOWN},     {"HOME", LV_SYMBOL_HOME},
+            {"SETTINGS", LV_SYMBOL_SETTINGS}, {"REFRESH", LV_SYMBOL_REFRESH}, {"PLAY", LV_SYMBOL_PLAY},
+            {"PAUSE", LV_SYMBOL_PAUSE},   {"STOP", LV_SYMBOL_STOP},     {"BELL", LV_SYMBOL_BELL},
+            {"WIFI", LV_SYMBOL_WIFI},     {"TRASH", LV_SYMBOL_TRASH},   {"EDIT", LV_SYMBOL_EDIT},
+            {"BACKSPACE", LV_SYMBOL_BACKSPACE}, {"WARNING", LV_SYMBOL_WARNING},
+        };
+        lua_createtable(p_lua, 0, static_cast<int>(sizeof(SYMBOLS) / sizeof(SYMBOLS[0])));
+        for (const auto& symbol : SYMBOLS) {
+            lua_pushstring(p_lua, symbol.p_glyph);
+            lua_setfield(p_lua, -2, symbol.p_name);
+        }
     }
 
     // ---- gach.timer ----
@@ -477,6 +604,10 @@ struct ScriptHost::Sdk {
                                       {"row", row},           {"list", list},         {"list_add", list_add},
                                       {"slider", slider},     {"set_text", set_text}, {"set_font", set_font},
                                       {"set_color", set_color}, {"clear", clear},     {"delete", destroy},
+                                      // SDK v2
+                                      {"box", box},           {"set_size", set_size}, {"set_grow", set_grow},
+                                      {"set_bg", set_bg},     {"set_radius", set_radius}, {"set_align", set_align},
+                                      {"set_pad", set_pad},   {"set_gap", set_gap},   {"center", center},
                                       {nullptr, nullptr}};
         static const luaL_Reg TIMER[] = {{"every", timer_every}, {"cancel", timer_cancel}, {nullptr, nullptr}};
         static const luaL_Reg SYS[] = {{"uptime_ms", uptime_ms}, {"time", time}, {nullptr, nullptr}};
@@ -484,6 +615,10 @@ struct ScriptHost::Sdk {
         static const luaL_Reg APP[] = {{"exit", app_exit}, {nullptr, nullptr}};
         lua_newtable(p_lua);
         add_table(p_lua, "ui", UI);
+        (void)lua_getfield(p_lua, -1, "ui");
+        push_symbols(p_lua);
+        lua_setfield(p_lua, -2, "SYMBOL");
+        lua_pop(p_lua, 1);
         add_table(p_lua, "timer", TIMER);
         add_table(p_lua, "sys", SYS);
         add_table(p_lua, "storage", STORAGE);

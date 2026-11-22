@@ -12,7 +12,7 @@
 
 namespace runtime {
 
-constexpr uint8_t SDK_VERSION = 1U;
+constexpr uint8_t SDK_VERSION = 2U; /**< v2: bố cục & kiểu dáng UI (box, set_size, set_bg...), SYMBOL. */
 
 } // namespace runtime
 
