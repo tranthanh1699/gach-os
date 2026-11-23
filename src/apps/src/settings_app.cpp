@@ -120,7 +120,7 @@ void SettingsApp::on_create(lv_obj_t* p_root)
     lv_obj_set_style_pad_gap(p_root, 0, 0);
     lv_obj_set_style_bg_color(p_root, lv_color_hex(glist::COLOR_PAGE_BG), 0);
     lv_obj_set_style_bg_opa(p_root, LV_OPA_COVER, 0);
-    lv_obj_remove_flag(p_root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(p_root, false);
 
     if (!m_is_split) {
         show_menu();
@@ -140,7 +140,7 @@ void SettingsApp::on_create(lv_obj_t* p_root)
     lv_obj_set_height(m_p_detail, LV_PCT(100));
     lv_obj_set_flex_grow(m_p_detail, 1);
     lv_obj_set_flex_flow(m_p_detail, LV_FLEX_FLOW_COLUMN);
-    lv_obj_remove_flag(m_p_detail, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(m_p_detail, false);
     show_page(Page::DISPLAY);
 }
 

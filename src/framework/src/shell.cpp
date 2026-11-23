@@ -27,7 +27,7 @@ lv_obj_t* create_bar(lv_obj_t* p_parent, int32_t height)
     lv_obj_set_style_pad_hor(p_bar, theme::px(BAR_PAD_HOR), 0);
     lv_obj_set_flex_flow(p_bar, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(p_bar, LV_FLEX_ALIGN_SPACE_BETWEEN, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_remove_flag(p_bar, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(p_bar, false);
     return p_bar;
 }
 
@@ -49,7 +49,7 @@ void Shell::create(AppManager& apps, const Services& services)
     lv_obj_set_style_pad_all(p_screen, 0, 0);
     lv_obj_set_style_pad_gap(p_screen, 0, 0);
     lv_obj_set_flex_flow(p_screen, LV_FLEX_FLOW_COLUMN);
-    lv_obj_remove_flag(p_screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(p_screen, false);
 
     // Status bar: tiêu đề app (trái) | icon Wi-Fi + đồng hồ (phải).
     lv_obj_t* const p_status = create_bar(p_screen, theme::px(config::STATUS_BAR_HEIGHT));
@@ -73,7 +73,7 @@ void Shell::create(AppManager& apps, const Services& services)
     lv_obj_remove_style_all(m_p_content);
     lv_obj_set_width(m_p_content, LV_PCT(100));
     lv_obj_set_flex_grow(m_p_content, 1);
-    lv_obj_remove_flag(m_p_content, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(m_p_content, false);
 
     // Nav bar: Back / Home (kiểu Android, tương đương soft-key của S60).
     lv_obj_t* const p_nav = create_bar(p_screen, theme::px(config::NAV_BAR_HEIGHT));
@@ -133,11 +133,11 @@ void Shell::refresh_status()
     const WifiStatus wifi = m_p_services->wifi().status();
     const bool show_wifi = (wifi == WifiStatus::CONNECTED) || (wifi == WifiStatus::CONNECTING);
     if (show_wifi) {
-        lv_obj_remove_flag(m_p_wifi_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(m_p_wifi_icon, false);
         const uint32_t color = (wifi == WifiStatus::CONNECTED) ? theme::COLOR_TEXT : theme::COLOR_TEXT_MUTED;
         lv_obj_set_style_text_color(m_p_wifi_icon, lv_color_hex(color), 0);
     } else {
-        lv_obj_add_flag(m_p_wifi_icon, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(m_p_wifi_icon, true);
     }
 }
 

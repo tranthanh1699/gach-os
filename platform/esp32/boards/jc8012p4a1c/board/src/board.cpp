@@ -43,7 +43,7 @@ drivers::PwmBacklight s_backlight{s_backlight_pwm, board::cfg::BACKLIGHT_ACTIVE_
 hal::Devices s_devices{board::cfg::BOARD_NAME, &s_display, &s_touch, nullptr, &s_system, nullptr, nullptr, nullptr,
                        nullptr, hal::MemoryRegion{nullptr, 0U}, &s_debug_port};
 
-constexpr size_t DRAW_BUFFER_ALIGN = 64U; /**< Căn theo cache line: CPU vẽ, PPA đọc bằng DMA. */
+constexpr size_t DRAW_BUFFER_ALIGN = 128U; /**< Cache line L2: CPU vẽ, PPA đọc bằng DMA (đồng bộ cache gọn theo dòng). */
 constexpr size_t RGB565_BYTES = 2U;
 
 /** @brief Cấp một buffer vẽ (RAM nội hoặc PSRAM theo cấu hình), nullptr nếu hết bộ nhớ. */

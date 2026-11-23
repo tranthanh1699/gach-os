@@ -176,7 +176,7 @@ common::Status AppManager::push(App& app)
     if (m_stack_depth > 0U) {
         StackEntry& top = m_stack[m_stack_depth - 1U];
         top.p_app->on_pause();
-        lv_obj_add_flag(top.p_root, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(top.p_root, true);
     }
 
     m_stack[m_stack_depth] = StackEntry{&app, p_root};
@@ -219,7 +219,7 @@ void AppManager::remove_at(size_t index)
 void AppManager::resume_top()
 {
     StackEntry& top = m_stack[m_stack_depth - 1U];
-    lv_obj_remove_flag(top.p_root, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(top.p_root, false);
     top.p_app->on_resume();
     notify_foreground();
 }

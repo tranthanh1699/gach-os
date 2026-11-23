@@ -87,7 +87,7 @@ void LauncherApp::on_create(lv_obj_t* p_root)
 {
     init_styles();
     lv_obj_set_flex_flow(p_root, LV_FLEX_FLOW_COLUMN);
-    lv_obj_remove_flag(p_root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(p_root, false);
 
     m_p_tileview = lv_tileview_create(p_root);
     lv_obj_remove_style_all(m_p_tileview);
@@ -104,7 +104,7 @@ void LauncherApp::on_create(lv_obj_t* p_root)
     lv_obj_set_flex_flow(m_p_indicator, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(m_p_indicator, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_style_pad_column(m_p_indicator, fw::theme::px(DOT_GAP), 0);
-    lv_obj_remove_flag(m_p_indicator, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(m_p_indicator, false);
 
     build_pages();
 }
@@ -173,7 +173,7 @@ void LauncherApp::build_pages()
         lv_obj_set_style_pad_column(p_page, fw::theme::px(GRID_GAP), 0);
         lv_obj_set_flex_flow(p_page, LV_FLEX_FLOW_ROW_WRAP);
         lv_obj_set_flex_align(p_page, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
-        lv_obj_remove_flag(p_page, LV_OBJ_FLAG_SCROLLABLE); // Chỉ tileview cuộn (ngang).
+        lv_obj_set_scrollable(p_page, false); // Chỉ tileview cuộn (ngang).
         m_pages[page] = p_page;
     }
 
@@ -253,7 +253,7 @@ void LauncherApp::create_tile(lv_obj_t* p_parent, fw::App& target)
     lv_obj_remove_style_all(p_tile);
     lv_obj_add_style(p_tile, &s_style_tile, 0);
     lv_obj_add_style(p_tile, &s_style_tile_pressed, LV_STATE_PRESSED);
-    lv_obj_add_flag(p_tile, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(p_tile, true);
     lv_obj_set_user_data(p_tile, &target);
     lv_obj_add_event_cb(p_tile, &LauncherApp::on_tile_clicked, LV_EVENT_CLICKED, this);
 
@@ -261,7 +261,7 @@ void LauncherApp::create_tile(lv_obj_t* p_parent, fw::App& target)
     lv_obj_remove_style_all(p_icon);
     lv_obj_add_style(p_icon, &s_style_icon, 0);
     lv_obj_set_style_bg_color(p_icon, lv_color_hex(target.info().color_hex), 0); // Style cục bộ duy nhất.
-    lv_obj_remove_flag(p_icon, LV_OBJ_FLAG_CLICKABLE);
+    lv_obj_set_clickable(p_icon, false);
 
     // Ký hiệu: trỏ thẳng vào chuỗi của AppInfo (sống bằng đời app), không cấp phát bản sao.
     lv_obj_t* const p_symbol = lv_label_create(p_icon);

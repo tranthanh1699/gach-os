@@ -7,6 +7,7 @@
 #include <cstdio>
 
 #include "common/string_utils.hpp"
+#include "framework/list_view.hpp"
 #include "framework/theme.hpp"
 #include "ui_helpers.hpp"
 
@@ -43,9 +44,7 @@ void AppStoreApp::on_create(lv_obj_t* p_root)
     m_p_install_btn = ui::button(p_header, LV_SYMBOL_SD_CARD, &AppStoreApp::on_install_clicked, this);
     lv_obj_set_size(m_p_install_btn, fw::theme::px(INSTALL_BUTTON_SIZE), fw::theme::px(INSTALL_BUTTON_SIZE));
 
-    m_p_list = lv_list_create(p_root);
-    lv_obj_set_width(m_p_list, LV_PCT(100));
-    lv_obj_set_flex_grow(m_p_list, 1);
+    m_p_list = fw::list_view::create(p_root);
 }
 
 void AppStoreApp::on_resume()
@@ -83,7 +82,7 @@ void AppStoreApp::rebuild()
         if (runtime::package_at(index, view)) {
             char text[TEXT_LEN] = {};
             (void)std::snprintf(text, sizeof(text), "%s  v%s", view.p_name, view.p_version);
-            lv_obj_t* const p_item = lv_list_add_button(m_p_list, LV_SYMBOL_FILE, text);
+            lv_obj_t* const p_item = fw::list_view::add(m_p_list, LV_SYMBOL_FILE, text);
             lv_obj_set_user_data(p_item, reinterpret_cast<void*>(static_cast<uintptr_t>(index)));
             lv_obj_add_event_cb(p_item, &AppStoreApp::on_package_clicked, LV_EVENT_CLICKED, this);
         }

@@ -13,6 +13,7 @@
 #include <initializer_list>
 
 #include "common/string_utils.hpp"
+#include "framework/list_view.hpp"
 #include "framework/theme.hpp"
 #include "fs_utils.hpp"
 #include "osal/osal.hpp"
@@ -150,7 +151,7 @@ struct ScriptHost::Sdk {
         lv_obj_set_style_pad_gap(p_box, CONTAINER_GAP, 0);
         lv_obj_set_flex_align(p_box, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
         // Container chỉ để bố cục: không nhận chạm, để click rơi xuống nút chứa nó (VD: ký hiệu vẽ trong nút).
-        lv_obj_remove_flag(p_box, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_clickable(p_box, false);
         return p_box;
     }
 
@@ -188,9 +189,7 @@ struct ScriptHost::Sdk {
 
     static int list(lua_State* p_lua)
     {
-        lv_obj_t* const p_list = lv_list_create(object(p_lua, 1));
-        lv_obj_set_width(p_list, LV_PCT(100));
-        lv_obj_set_flex_grow(p_list, 1);
+        lv_obj_t* const p_list = fw::list_view::create(object(p_lua, 1)); // Rộng 100%, chiếm phần còn lại.
         return push_new(p_lua, p_list, 0, LV_EVENT_ALL);
     }
 
@@ -198,7 +197,7 @@ struct ScriptHost::Sdk {
     {
         lv_obj_t* const p_list = object(p_lua, 1);
         const char* const p_text = luaL_checkstring(p_lua, 2);
-        return push_new(p_lua, lv_list_add_button(p_list, nullptr, p_text), 3, LV_EVENT_CLICKED);
+        return push_new(p_lua, fw::list_view::add(p_list, nullptr, p_text), 3, LV_EVENT_CLICKED);
     }
 
     static int slider(lua_State* p_lua)
@@ -272,11 +271,11 @@ struct ScriptHost::Sdk {
         const auto handle = static_cast<int32_t>(luaL_checkinteger(p_lua, 1));
         luaL_checktype(p_lua, 2, LUA_TFUNCTION);
         luaL_argcheck(p_lua, p_host->m_refs[handle - 1] == LUA_NOREF, 1, "widget already has a callback");
-        lv_obj_add_flag(p_obj, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_remove_flag(p_obj, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_clickable(p_obj, true);
+        lv_obj_set_scrollable(p_obj, false);
         // LVGL chuyển cử chỉ lên cha chừng nào còn GESTURE_BUBBLE (mặc định bật cho mọi object):
         // tắt ở đây để cử chỉ dừng tại widget này thay vì trôi lên khung shell.
-        lv_obj_remove_flag(p_obj, LV_OBJ_FLAG_GESTURE_BUBBLE);
+        lv_obj_set_gesture_bubble(p_obj, false);
         lua_pushvalue(p_lua, 2);
         p_host->attach_callback(handle, luaL_ref(p_lua, LUA_REGISTRYINDEX), LV_EVENT_GESTURE);
         return 0;
@@ -346,8 +345,8 @@ struct ScriptHost::Sdk {
         lv_obj_t* const p_box = lv_obj_create(object(p_lua, 1));
         lv_obj_remove_style_all(p_box);
         lv_obj_set_size(p_box, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-        lv_obj_remove_flag(p_box, LV_OBJ_FLAG_CLICKABLE); // Hình trang trí: click rơi xuống widget cha.
-        lv_obj_remove_flag(p_box, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_set_clickable(p_box, false); // Hình trang trí: click rơi xuống widget cha.
+        lv_obj_set_scrollable(p_box, false);
         return push_new(p_lua, p_box, 0, LV_EVENT_ALL);
     }
 

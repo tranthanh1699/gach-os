@@ -24,8 +24,8 @@ void TouchTestApp::on_create(lv_obj_t* p_root)
     m_p_canvas = lv_obj_create(p_root);
     lv_obj_remove_style_all(m_p_canvas);
     lv_obj_set_size(m_p_canvas, LV_PCT(100), LV_PCT(100));
-    lv_obj_add_flag(m_p_canvas, LV_OBJ_FLAG_CLICKABLE);
-    lv_obj_remove_flag(m_p_canvas, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_clickable(m_p_canvas, true);
+    lv_obj_set_scrollable(m_p_canvas, false);
     lv_obj_add_event_cb(m_p_canvas, &TouchTestApp::on_pressing, LV_EVENT_PRESSING, this);
 
     for (lv_obj_t*& p_dot : m_p_dots) {
@@ -35,8 +35,8 @@ void TouchTestApp::on_create(lv_obj_t* p_root)
         lv_obj_set_style_radius(p_dot, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(p_dot, LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(p_dot, lv_color_hex(fw::theme::COLOR_SECONDARY), 0);
-        lv_obj_remove_flag(p_dot, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_flag(p_dot, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_clickable(p_dot, false);
+        lv_obj_set_hidden(p_dot, true);
     }
 
     m_p_coord = ui::label(p_root, "Touch anywhere", fw::theme::font_small(), fw::theme::COLOR_TEXT_MUTED);
@@ -60,7 +60,7 @@ void TouchTestApp::on_destroy()
 void TouchTestApp::clear()
 {
     for (lv_obj_t* const p_dot : m_p_dots) {
-        lv_obj_add_flag(p_dot, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(p_dot, true);
     }
     m_next_dot = 0U;
 }
@@ -83,7 +83,7 @@ void TouchTestApp::on_pressing(lv_event_t* p_event)
     lv_obj_t* const p_dot = p_self->m_p_dots[p_self->m_next_dot];
     const int32_t half = fw::theme::px(DOT_SIZE) / 2;
     lv_obj_set_pos(p_dot, local_x - half, local_y - half);
-    lv_obj_remove_flag(p_dot, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_hidden(p_dot, false);
     p_self->m_next_dot = (p_self->m_next_dot + 1U) % DOT_COUNT;
 
     lv_label_set_text_fmt(p_self->m_p_coord, "x=%d  y=%d", static_cast<int>(point.x), static_cast<int>(point.y));

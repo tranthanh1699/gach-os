@@ -84,7 +84,7 @@ inline lv_obj_t* group(lv_obj_t* p_page)
     lv_obj_set_style_radius(p_group, fw::theme::px(GROUP_RADIUS), 0);
     lv_obj_set_style_clip_corner(p_group, true, 0);
     lv_obj_set_flex_flow(p_group, LV_FLEX_FLOW_COLUMN);
-    lv_obj_remove_flag(p_group, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(p_group, false);
     return p_group;
 }
 
@@ -111,14 +111,14 @@ inline lv_obj_t* row(lv_obj_t* p_group, const char* p_symbol, uint32_t icon_colo
     lv_obj_set_style_pad_column(p_row, fw::theme::px(ROW_GAP), 0);
     lv_obj_set_flex_flow(p_row, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(p_row, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_remove_flag(p_row, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(p_row, false);
     if (lv_obj_get_index(p_row) > 0) {
         lv_obj_set_style_border_side(p_row, LV_BORDER_SIDE_TOP, 0);
         lv_obj_set_style_border_width(p_row, fw::theme::px(SEPARATOR_WIDTH), 0);
         lv_obj_set_style_border_color(p_row, lv_color_hex(COLOR_SEPARATOR), 0);
     }
     if (cb != nullptr) {
-        lv_obj_add_flag(p_row, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_clickable(p_row, true);
         lv_obj_set_style_bg_color(p_row, lv_color_hex(COLOR_PRESSED), LV_STATE_PRESSED);
         lv_obj_set_style_bg_opa(p_row, LV_OPA_COVER, LV_STATE_PRESSED);
         lv_obj_add_event_cb(p_row, cb, LV_EVENT_CLICKED, p_user_data);
@@ -131,7 +131,7 @@ inline lv_obj_t* row(lv_obj_t* p_group, const char* p_symbol, uint32_t icon_colo
         lv_obj_set_style_radius(p_icon, fw::theme::px(ICON_RADIUS), 0);
         lv_obj_set_style_bg_color(p_icon, lv_color_hex(icon_color), 0);
         lv_obj_set_style_bg_opa(p_icon, LV_OPA_COVER, 0);
-        lv_obj_remove_flag(p_icon, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_clickable(p_icon, false);
         lv_obj_t* const p_glyph = lv_label_create(p_icon);
         lv_label_set_text_static(p_glyph, p_symbol);
         lv_obj_set_style_text_color(p_glyph, lv_color_white(), 0);

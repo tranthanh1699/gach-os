@@ -7,6 +7,7 @@
 #include <cstdio>
 
 #include "common/string_utils.hpp"
+#include "framework/list_view.hpp"
 #include "framework/services.hpp"
 #include "framework/theme.hpp"
 #include "ui_helpers.hpp"
@@ -44,9 +45,7 @@ void WifiApp::on_create(lv_obj_t* p_root)
     ui::column_layout(p_root);
     create_header(p_root);
 
-    m_p_list = lv_list_create(p_root);
-    lv_obj_set_width(m_p_list, LV_PCT(100));
-    lv_obj_set_flex_grow(m_p_list, 1);
+    m_p_list = fw::list_view::create(p_root);
 
     // Ép dựng lại danh sách lần đầu dù generation đang là 0.
     m_shown_generation = context().services.wifi().scan_generation() + 1U;
@@ -106,9 +105,9 @@ void WifiApp::refresh()
     const bool connected = (wifi.status() == fw::WifiStatus::CONNECTED) ||
                            (wifi.status() == fw::WifiStatus::CONNECTING);
     if (connected) {
-        lv_obj_remove_flag(m_p_disconnect_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(m_p_disconnect_btn, false);
     } else {
-        lv_obj_add_flag(m_p_disconnect_btn, LV_OBJ_FLAG_HIDDEN);
+        lv_obj_set_hidden(m_p_disconnect_btn, true);
     }
     if (wifi.is_scanning() || !wifi.is_available()) {
         lv_obj_add_state(m_p_scan_btn, LV_STATE_DISABLED);
@@ -160,7 +159,7 @@ void WifiApp::rebuild_list()
         char text[ITEM_TEXT_LEN] = {};
         (void)std::snprintf(text, sizeof(text), "%s  %ddBm%s", p_net->ssid, static_cast<int>(p_net->rssi),
                             p_net->secure ? "" : "  (open)");
-        lv_obj_t* const p_item = lv_list_add_button(m_p_list, LV_SYMBOL_WIFI, text);
+        lv_obj_t* const p_item = fw::list_view::add(m_p_list, LV_SYMBOL_WIFI, text);
         // Lưu chỉ số mạng trong user data (không cấp phát).
         lv_obj_set_user_data(p_item, reinterpret_cast<void*>(static_cast<uintptr_t>(index)));
         lv_obj_add_event_cb(p_item, &WifiApp::on_network_clicked, LV_EVENT_CLICKED, this);
@@ -188,14 +187,14 @@ void WifiApp::open_password_dialog()
     }
     // Dialog nổi phủ toàn vùng app (FLOATING: không tham gia layout flex của root).
     m_p_dialog = lv_obj_create(m_p_root);
-    lv_obj_add_flag(m_p_dialog, LV_OBJ_FLAG_FLOATING);
+    lv_obj_set_floating(m_p_dialog, true);
     lv_obj_set_size(m_p_dialog, LV_PCT(100), LV_PCT(100));
     lv_obj_align(m_p_dialog, LV_ALIGN_TOP_LEFT, 0, 0);
     lv_obj_set_style_pad_all(m_p_dialog, fw::theme::px(DIALOG_PAD), 0);
     lv_obj_set_style_pad_row(m_p_dialog, fw::theme::px(DIALOG_PAD), 0);
     lv_obj_set_style_radius(m_p_dialog, 0, 0);
     lv_obj_set_flex_flow(m_p_dialog, LV_FLEX_FLOW_COLUMN);
-    lv_obj_remove_flag(m_p_dialog, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_set_scrollable(m_p_dialog, false);
 
     m_p_password = lv_textarea_create(m_p_dialog);
     lv_obj_set_width(m_p_password, LV_PCT(100));
