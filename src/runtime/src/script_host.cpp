@@ -65,6 +65,8 @@ void* arena_alloc(void* p_ud, void* p_ptr, size_t old_size, size_t new_size)
     return p_arena->reallocate(p_ptr, new_size);
 }
 
+constexpr uint8_t SDK_SCALED_UI = 3U; /**< Từ SDK v3: kích thước app tính theo dp, font co giãn. */
+
 ScriptHost* host_of(lua_State* p_lua)
 {
     return *static_cast<ScriptHost**>(lua_getextraspace(p_lua));
@@ -226,20 +228,71 @@ struct ScriptHost::Sdk {
         return 0;
     }
 
+    // ---- Co giãn theo màn hình (SDK v3) ----
+    /** @return true nếu app khai báo sdk >= 3: kích thước là dp, font co giãn theo màn hình. */
+    static bool is_scaled(lua_State* p_lua) { return host_of(p_lua)->m_manifest.sdk >= SDK_SCALED_UI; }
+
+    /** @brief Kích thước app truyền vào -> pixel thật (app đời cũ: giữ nguyên pixel như đã công bố). */
+    static int32_t to_px(lua_State* p_lua, lua_Integer value)
+    {
+        const auto length = static_cast<int32_t>(value);
+        return is_scaled(p_lua) ? fw::theme::px(length) : length;
+    }
+
+    /** @brief Font theo tên cỡ; app đời cũ dùng đúng cỡ 14/20/28 px đã công bố. */
+    static const lv_font_t* font_for(lua_State* p_lua, fw::theme::FontSize size)
+    {
+        return is_scaled(p_lua) ? fw::theme::font(size) : fw::theme::base_font(size);
+    }
+
     static int set_font(lua_State* p_lua)
     {
         lv_obj_t* const p_obj = object(p_lua, 1);
         const char* const p_size = luaL_checkstring(p_lua, 2);
-        const lv_font_t* p_font = fw::theme::font_small();
+        fw::theme::FontSize size = fw::theme::FontSize::SMALL; // "small" hoặc giá trị lạ -> font mặc định.
         if (std::strcmp(p_size, "large") == 0) {
-            p_font = fw::theme::font_large();
+            size = fw::theme::FontSize::LARGE;
         } else if (std::strcmp(p_size, "medium") == 0) {
-            p_font = fw::theme::font_medium();
-        } else {
-            // "small" hoặc giá trị lạ -> font mặc định.
+            size = fw::theme::FontSize::MEDIUM;
         }
-        lv_obj_set_style_text_font(p_obj, p_font, 0);
+        lv_obj_set_style_text_font(p_obj, font_for(p_lua, size), 0);
         return 0;
+    }
+
+    /**
+     * @brief gach.ui.on_swipe(h, fn): gọi fn("up"|"down"|"left"|"right") khi vuốt trên widget (SDK v3).
+     *
+     * Widget được bật nhận chạm và tắt cuộn (cuộn sẽ "nuốt" cử chỉ vuốt). Cử chỉ bắt đầu trên widget con
+     * không có callback (box, label, row, column) cũng nổi lên widget này -> thường gắn vào root.
+     */
+    static int on_swipe(lua_State* p_lua)
+    {
+        ScriptHost* const p_host = host_of(p_lua);
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        const auto handle = static_cast<int32_t>(luaL_checkinteger(p_lua, 1));
+        luaL_checktype(p_lua, 2, LUA_TFUNCTION);
+        luaL_argcheck(p_lua, p_host->m_refs[handle - 1] == LUA_NOREF, 1, "widget already has a callback");
+        lv_obj_add_flag(p_obj, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_remove_flag(p_obj, LV_OBJ_FLAG_SCROLLABLE);
+        lua_pushvalue(p_lua, 2);
+        p_host->attach_callback(handle, luaL_ref(p_lua, LUA_REGISTRYINDEX), LV_EVENT_GESTURE);
+        return 0;
+    }
+
+    /** @brief gach.ui.screen_size() -> w, h: vùng nội dung của app (đơn vị app dùng: dp nếu sdk>=3). */
+    static int screen_size(lua_State* p_lua)
+    {
+        lv_obj_t* const p_root = host_of(p_lua)->m_p_root;
+        lv_obj_update_layout(p_root);
+        int32_t width = lv_obj_get_content_width(p_root);
+        int32_t height = lv_obj_get_content_height(p_root);
+        if (is_scaled(p_lua)) {
+            width = (width * fw::theme::SCALE_100) / fw::theme::scale_pct();
+            height = (height * fw::theme::SCALE_100) / fw::theme::scale_pct();
+        }
+        lua_pushinteger(p_lua, width);
+        lua_pushinteger(p_lua, height);
+        return 2;
     }
 
     static int set_color(lua_State* p_lua)
@@ -269,7 +322,7 @@ struct ScriptHost::Sdk {
     static int32_t length_arg(lua_State* p_lua, int arg)
     {
         if (lua_type(p_lua, arg) == LUA_TNUMBER) {
-            return static_cast<int32_t>(luaL_checkinteger(p_lua, arg));
+            return to_px(p_lua, luaL_checkinteger(p_lua, arg));
         }
         size_t len = 0U;
         const char* const p_text = luaL_checklstring(p_lua, arg, &len);
@@ -333,7 +386,7 @@ struct ScriptHost::Sdk {
         if ((lua_type(p_lua, 2) == LUA_TSTRING) && (std::strcmp(lua_tostring(p_lua, 2), "round") == 0)) {
             radius = LV_RADIUS_CIRCLE;
         } else {
-            radius = static_cast<int32_t>(luaL_checkinteger(p_lua, 2));
+            radius = to_px(p_lua, luaL_checkinteger(p_lua, 2));
         }
         lv_obj_set_style_radius(p_obj, radius, 0);
         return 0;
@@ -356,13 +409,13 @@ struct ScriptHost::Sdk {
 
     static int set_pad(lua_State* p_lua)
     {
-        lv_obj_set_style_pad_all(object(p_lua, 1), static_cast<int32_t>(luaL_checkinteger(p_lua, 2)), 0);
+        lv_obj_set_style_pad_all(object(p_lua, 1), to_px(p_lua, luaL_checkinteger(p_lua, 2)), 0);
         return 0;
     }
 
     static int set_gap(lua_State* p_lua)
     {
-        lv_obj_set_style_pad_gap(object(p_lua, 1), static_cast<int32_t>(luaL_checkinteger(p_lua, 2)), 0);
+        lv_obj_set_style_pad_gap(object(p_lua, 1), to_px(p_lua, luaL_checkinteger(p_lua, 2)), 0);
         return 0;
     }
 
@@ -608,6 +661,8 @@ struct ScriptHost::Sdk {
                                       {"box", box},           {"set_size", set_size}, {"set_grow", set_grow},
                                       {"set_bg", set_bg},     {"set_radius", set_radius}, {"set_align", set_align},
                                       {"set_pad", set_pad},   {"set_gap", set_gap},   {"center", center},
+                                      // SDK v3
+                                      {"screen_size", screen_size}, {"on_swipe", on_swipe},
                                       {nullptr, nullptr}};
         static const luaL_Reg TIMER[] = {{"every", timer_every}, {"cancel", timer_cancel}, {nullptr, nullptr}};
         static const luaL_Reg SYS[] = {{"uptime_ms", uptime_ms}, {"time", time}, {nullptr, nullptr}};
@@ -684,9 +739,15 @@ common::Status ScriptHost::start(const Manifest& manifest, lv_obj_t* p_root, fw:
         slot = TimerSlot{nullptr, LUA_NOREF};
     }
 
-    lv_obj_set_style_pad_all(p_root, fw::theme::PAD_NORMAL, 0);
-    lv_obj_set_style_pad_gap(p_root, fw::theme::PAD_NORMAL, 0);
+    // App sdk >= 3 co giãn theo màn hình; app đời cũ giữ nguyên pixel và font 14 px như lúc phát hành.
+    const bool is_scaled_ui = (manifest.sdk >= SDK_SCALED_UI);
+    const int32_t root_pad = is_scaled_ui ? fw::theme::pad() : fw::theme::BASE_PAD;
+    lv_obj_set_style_pad_all(p_root, root_pad, 0);
+    lv_obj_set_style_pad_gap(p_root, root_pad, 0);
     lv_obj_set_flex_flow(p_root, LV_FLEX_FLOW_COLUMN);
+    if (!is_scaled_ui) {
+        lv_obj_set_style_text_font(p_root, fw::theme::base_font(fw::theme::FontSize::SMALL), 0);
+    }
 
     m_allocator.reset(m_arena.p_base, m_arena.size);
     m_p_lua = lua_newstate(&arena_alloc, &m_allocator);
@@ -913,9 +974,42 @@ void ScriptHost::on_lv_event(lv_event_t* p_event)
     } else if (code == LV_EVENT_VALUE_CHANGED) {
         const int32_t value = lv_slider_get_value(p_obj);
         p_host->invoke(ref, &value);
+    } else if (code == LV_EVENT_GESTURE) {
+        lv_indev_t* const p_indev = lv_indev_active();
+        const char* p_dir = nullptr;
+        switch ((p_indev != nullptr) ? lv_indev_get_gesture_dir(p_indev) : LV_DIR_NONE) {
+        case LV_DIR_LEFT:
+            p_dir = "left";
+            break;
+        case LV_DIR_RIGHT:
+            p_dir = "right";
+            break;
+        case LV_DIR_TOP:
+            p_dir = "up";
+            break;
+        case LV_DIR_BOTTOM:
+            p_dir = "down";
+            break;
+        default:
+            break;
+        }
+        if (p_dir != nullptr) {
+            lv_indev_wait_release(p_indev); // Một lần vuốt = một sự kiện, không lặp khi ngón tay còn trượt.
+            p_host->invoke_text(ref, p_dir);
+        }
     } else {
         p_host->invoke(ref, nullptr);
     }
+}
+
+void ScriptHost::invoke_text(int ref, const char* p_arg)
+{
+    if ((m_p_lua == nullptr) || m_faulted || m_in_call || (ref == LUA_NOREF)) {
+        return;
+    }
+    lua_rawgeti(m_p_lua, LUA_REGISTRYINDEX, ref);
+    lua_pushstring(m_p_lua, p_arg);
+    (void)protected_call(1, 0);
 }
 
 void ScriptHost::on_timer(lv_timer_t* p_timer)

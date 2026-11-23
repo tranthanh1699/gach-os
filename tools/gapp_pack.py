@@ -24,7 +24,18 @@ import sys
 import tarfile
 from pathlib import Path
 
-SDK_VERSION = 2  # Phải khớp src/runtime/include/runtime/sdk_version.hpp
+SDK_HEADER = Path(__file__).resolve().parent.parent / "src/runtime/include/runtime/sdk_version.hpp"
+
+
+def read_sdk_version(header: Path = SDK_HEADER) -> int:
+    """Đọc runtime::SDK_VERSION từ header C++ (nguồn sự thật duy nhất, tránh lệch phiên bản)."""
+    match = re.search(r"SDK_VERSION\s*=\s*(\d+)U?", header.read_text(encoding="utf-8"))
+    if not match:
+        raise SystemExit(f"cannot find SDK_VERSION in {header}")
+    return int(match.group(1))
+
+
+SDK_VERSION = read_sdk_version()
 ID_RE = re.compile(r"^[a-z0-9_-][a-z0-9._-]{0,30}$")
 MAX_PATH = 100  # Giới hạn tên trong header tar ustar (không dùng prefix cho đơn giản).
 EXCLUDE = {".DS_Store", "Thumbs.db"}

@@ -72,6 +72,7 @@ private:
     bool protected_call(int nargs, int nresults);
     bool call_app(const char* p_method, const int32_t* p_arg, bool* p_result);
     void invoke(int ref, const int32_t* p_arg);
+    void invoke_text(int ref, const char* p_arg);
     void fault(const char* p_message);
     void close_vm();
     void show_error();

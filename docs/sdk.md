@@ -1,4 +1,4 @@
-# gach SDK (v2): viết app cài thêm cho gach-os
+# gach SDK (v3): viết app cài thêm cho gach-os
 
 App cài thêm là một **gói `.gapp`** chứa mã Lua 5.4, tương tự file `.jar` trên Nokia S60 hay `.apk` trên Android. Gói chạy trong máy ảo có sandbox, nên cùng một gói chạy được trên mọi board gach-os, bất kể chip hay kích thước màn hình.
 
@@ -83,6 +83,23 @@ Font hệ thống chỉ có ASCII cùng các ký hiệu trong `SYMBOL`; ký tự
 
 `column`/`row` chỉ dùng để bố cục, không nhận chạm (chạm rơi xuống widget chứa nó).
 
+#### Co giãn theo màn hình (SDK v3, manifest `sdk=3`)
+
+gach-os chạy trên cả màn 320x240 lẫn máy tính bảng 1280x800. App khai báo `sdk=3` viết kích thước theo **dp**
+(đơn vị thiết kế cho màn 320x240) và được hệ thống đổi sang pixel thật theo tỷ lệ màn hình (máy tính bảng: 1.5x):
+
+- Mọi số pixel truyền vào `set_size`, `set_pad`, `set_gap`, `set_radius` được hiểu là dp.
+- `set_font("small"|"medium"|"large")` cho cỡ chữ co giãn tương ứng (14/20/28 dp).
+- Root của app có lề chuẩn đã co giãn.
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `screen_size() -> w, h` | Kích thước vùng nội dung của app (dp với `sdk=3`, pixel với `sdk<=2`): dùng để chọn bố cục (VD: thêm cột trên màn rộng) |
+| `on_swipe(h, fn)` | Gọi `fn(dir)` với `dir` = `"up"`/`"down"`/`"left"`/`"right"` mỗi lần vuốt trên widget `h`. Widget được bật nhận chạm và tắt cuộn. Vuốt bắt đầu trên widget con không có callback (`box`, `label`, `row`, `column`) cũng được tính, nên thường gắn vào `root`. Mỗi widget chỉ có một callback: không dùng cho widget đã có `on_click`/`on_change` |
+
+App `sdk<=2` **không đổi hành vi**: số pixel giữ nguyên nghĩa pixel thật, font đúng 14/20/28 px, nên trên màn lớn
+sẽ hiển thị nhỏ nhưng bố cục không vỡ. Muốn co giãn, nâng manifest lên `sdk=3` (yêu cầu gach-os có SDK v3).
+
 ### gach.timer
 
 | Hàm | Mô tả |
@@ -118,7 +135,7 @@ Dữ liệu lưu trong `apps/<id>/data.ini` trên thẻ SD và **được giữ 
 
 Thư viện Lua có sẵn: `string`, `table`, `math`, `utf8`, `coroutine` và các hàm cơ bản. Sandbox **không có** `io`, `os`, `require`, `load`, `dofile`.
 
-## 3. Giới hạn (board ESP32-2432S028R, không PSRAM)
+## 3. Giới hạn (board ESP32-2432S028R, không PSRAM; board có PSRAM cấp RAM máy ảo lớn hơn)
 
 | Tài nguyên | Giới hạn | Khi vượt |
 | :--- | :--- | :--- |
@@ -157,7 +174,8 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 
 - [`appstore/apps/counter`](../appstore/apps/counter): UI, sự kiện, timer, `gach.storage`.
 - [`appstore/apps/world_clock`](../appstore/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
-- [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v2): máy tính bỏ túi kiểu điện thoại, gồm bố cục lưới co giãn, nút tròn, đổi màu khi chọn toán tử, và ký hiệu `÷` vẽ bằng `box`.
+- [`appstore/apps/game2048`](../appstore/apps/game2048) (SDK v3): game 2048 với `on_swipe`, bàn cờ vuông co giãn theo màn hình, lưu ván đang chơi và điểm cao nhất.
+- [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v3): máy tính kiểu điện thoại / máy tính bảng. Dùng `screen_size()` để chọn bố cục (màn rộng có thêm phím khoa học và lịch sử), lưu lịch sử bằng `gach.storage` dạng bộ đệm vòng, và vẽ ký hiệu `÷` bằng `box`.
 
 ## 6. Tương thích
 
@@ -165,6 +183,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 | :--- | :--- |
 | 1 | `gach.ui` cơ bản, `timer`, `sys`, `storage`, `app` |
 | 2 | Bố cục & kiểu dáng: `box`, `set_size`, `set_grow`, `set_bg`, `set_radius`, `set_align`, `set_pad`, `set_gap`, `center`, `SYMBOL` |
+| 3 | Co giãn theo màn hình: app `sdk=3` dùng dp và font co giãn; `screen_size`, `on_swipe` (vuốt) |
 
 - Runtime từ chối gói có `sdk` lớn hơn `gach.sdk_version` của máy.
 - API đã phát hành **không bao giờ bị xóa hay đổi nghĩa**; SDK mới chỉ thêm API. App viết cho `sdk=1` chạy được trên mọi bản gach-os về sau.
