@@ -1,4 +1,4 @@
-# gach SDK (v5): viết app cài thêm cho gach-os
+# gach SDK (v6): viết app cài thêm cho gach-os
 
 App cài thêm là một **gói `.gapp`** chứa mã Lua 5.4, tương tự file `.jar` trên Nokia S60 hay `.apk` trên Android. Gói chạy trong máy ảo có sandbox, nên cùng một gói chạy được trên mọi board gach-os, bất kể chip hay kích thước màn hình.
 
@@ -121,6 +121,81 @@ Kích thước tính theo dp như SDK v3.
 | :--- | :--- |
 | `set_pos(h, x, y)` | Đặt góc trên trái (dp) **trong một `box`** (box không tự bố cục). Trong `row`/`column` vị trí do bố cục quyết định, lệnh không có tác dụng. Dùng để ghép hình: VD icon đám mây = 3 `box` bo tròn chồng lên nhau (xem app Weather) |
 
+#### Sự kiện, nút, nhập liệu, giao diện hệ thống, hiệu ứng (SDK v6, manifest `sdk=6`)
+
+Mẫu sống: app [`appstore/apps/uikit`](../appstore/apps/uikit) trưng bày mọi API dưới đây.
+
+**Sự kiện**: gắn nhiều loại sự kiện cho cùng một widget, mỗi loại một hàm (gọi lại `on` cùng loại = thay hàm).
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `on(h, event, fn)` | `event`: `"click"`, `"long_press"`, `"press"`, `"release"` (widget tự bật nhận chạm, kể cả `box`/`column`/`label`); `"change"` → `fn(value)` (giá trị như `get_value`); `"focus"`, `"blur"`; `"submit"` → `fn(text)` khi nhấn OK trên bàn phím của `textfield`; `"swipe"` → `fn("up"\|"down"\|"left"\|"right")` |
+| `off(h, event?)` | Bỏ hàm của một loại sự kiện (không truyền `event` = bỏ tất cả) |
+
+Callback cũ (`button(..., fn)`, `slider(..., fn)`, `on_swipe`) vẫn chạy như trước và độc lập với `on`.
+
+**Nút nhiều kiểu**: `button(parent, opts, fn?)` với `opts` là bảng (truyền chuỗi = nút kiểu cũ):
+
+| Khóa | Giá trị |
+| :--- | :--- |
+| `text`, `icon` | Chữ và/hoặc ký hiệu `SYMBOL.*` (icon đứng trước chữ) |
+| `variant` | `"filled"` (mặc định), `"tinted"`, `"gray"`, `"outline"`, `"plain"`, `"destructive"` |
+| `size` | `"sm"` (32 dp), `"md"` (40 dp, mặc định), `"lg"` (52 dp, chữ medium) |
+| `color` | Màu nhấn thay cho xanh hệ thống |
+| `shape` | `"pill"` = bo tròn hai đầu |
+
+**Widget nhập liệu & trạng thái**
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `textfield(parent, {placeholder=, text=, password=, max=, width=}) -> h` | Ô nhập một dòng. Chạm vào → bàn phím hệ thống trượt lên từ đáy; app tự đẩy lên nếu ô bị che. `change` mỗi lần gõ, `submit` khi nhấn OK |
+| `switch(parent, on?) -> h` | Công tắc kiểu iOS, `change` → `fn(bool)` |
+| `checkbox(parent, text, checked?) -> h` | `change` → `fn(bool)` |
+| `segmented(parent, {"A","B",...}, index?) -> h` | Thanh chọn một mục, `change` → `fn(index)` (từ 1) |
+| `dropdown(parent, {"A","B",...}, index?) -> h` | Danh sách thả xuống, `change` → `fn(index)` |
+| `spinner(parent, size?) -> h` | Vòng xoay chờ (mặc định 32 dp) |
+| `get_value(h)` | slider/bar/arc → số; switch/checkbox → bool; segmented/dropdown → chỉ số; textfield → chuỗi; khác → `nil` |
+| `set_value(h, v)` | Mở rộng cho các widget trên (bool, chỉ số, chuỗi) |
+| `get_text(h)` | Chữ của label / nút / mục list / textfield / checkbox |
+| `set_enabled(h, bool)` | Vô hiệu hóa (mờ, không nhận chạm) |
+| `set_visible(h, bool)` | Ẩn / hiện (ẩn thì không chiếm chỗ trong bố cục) |
+
+**Giao diện hệ thống**
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `alert{title=, message=, buttons={"Cancel","OK"}, destructive=, fn=}` | Hộp thoại kiểu iOS (tối đa 2 nút, nút cuối là hành động chính; `destructive=true` → nút cuối màu đỏ). `fn(i)`: `i` = số thứ tự nút (từ 1), `0` nếu đóng bằng Back |
+| `toast(text, ms?)` | Thông báo nổi ở đáy màn hình, tự mờ dần (mặc định 2000 ms) |
+
+Bàn phím, hộp thoại và toast tự đóng khi app vào nền hoặc thoát; nút Back đóng chúng trước khi tới `app.on_back`.
+
+**Kiểu dáng gom một lệnh**: `style(h, {...})` (khóa lạ báo lỗi để bắt lỗi chính tả).
+
+| Khóa | Ý nghĩa |
+| :--- | :--- |
+| `bg`, `bg_opa` (0-100), `opa` (0-100) | Màu nền, độ đậm nền, độ đậm cả widget |
+| `radius` (dp \| `"round"`), `border` (dp), `border_color`, `shadow` (dp), `shadow_color`, `clip` | Bo góc, viền, bóng, cắt con theo góc bo |
+| `pad`, `pad_x`, `pad_y`, `gap` | Lề trong, khoảng cách giữa con (dp) |
+| `width`, `height` (dp \| `"N%"` \| `"content"`), `grow` | Kích thước |
+| `justify`, `align` | Căn trục chính / trục phụ của `row`/`column`: `"start"`, `"center"`, `"end"`, `"between"`, `"around"`, `"evenly"` |
+| `color`, `font` (`"small"`\|`"medium"`\|`"large"`), `text_align` | Chữ |
+| `pressed_bg`, `pressed_opa` | Kiểu khi đang bị nhấn |
+| `scroll` | Bật / tắt cuộn. Bật = vùng này nhận cú kéo ở bất kỳ đâu (kể cả nền, chữ, khoảng trống giữa các thẻ) |
+
+**Hiệu ứng**: `animate(h, {x=, y=, w=, h=, opa=, ms=300, delay=0, ease="out", done=fn})`. Chạy từ giá trị hiện tại tới giá trị đích (dp; `opa` 0-100). `ease`: `"linear"`, `"in"`, `"out"`, `"in_out"`, `"overshoot"`, `"bounce"`. `x`/`y` chỉ có tác dụng với widget trong `box` (xem `set_pos`). `done` gọi một lần khi xong.
+
+**Ký hiệu mới** trong `SYMBOL`: `EYE_OPEN EYE_CLOSE LIST IMAGE AUDIO VIDEO SAVE COPY CUT PASTE DOWNLOAD UPLOAD FILE FOLDER SD_CARD POWER CHARGE BATTERY BLUETOOTH GPS USB ENVELOPE CALL KEYBOARD VOLUME MUTE PREV NEXT SHUFFLE LOOP BARS DRIVE TINT`.
+
+```lua
+local name = ui.textfield(root, { placeholder = "Your name" })
+ui.on(name, "submit", function(text) ui.toast("Hello, " .. text) end)
+local del = ui.button(root, { text = "Delete", icon = ui.SYMBOL.TRASH, variant = "destructive" })
+ui.on(del, "click", function()
+  ui.alert { title = "Delete note?", buttons = { "Cancel", "Delete" }, destructive = true,
+             fn = function(i) if i == 2 then ui.animate(del, { opa = 0, ms = 200 }) end end }
+end)
+```
+
 ### gach.timer
 
 | Hàm | Mô tả |
@@ -206,7 +281,8 @@ Thư viện Lua có sẵn: `string`, `table`, `math`, `utf8`, `coroutine` và c�
 | :--- | :--- | :--- |
 | RAM máy ảo | 1 MiB/app trong PSRAM (gồm cả runtime Lua) | Lỗi `not enough memory`, app hiện màn hình lỗi |
 | Thời gian mỗi lần gọi (callback, vòng đời) | 500 ms | Lỗi `script timeout` |
-| Widget | 96 / app | Lỗi `too many UI objects` |
+| Widget | 256 / app (heap giao diện ~128 KiB chung: màn hình rất nhiều widget có thể hết trước) | Lỗi `too many UI objects` |
+| Sự kiện `ui.on` | 256 cặp (widget, loại) / app | Lỗi `too many event handlers` |
 | Timer | 8 / app | Lỗi `too many timers` |
 | App cài đồng thời | 128 | Báo lỗi `too many apps installed`, gói được giữ lại trong `/install` |
 | App script mở cùng lúc | 1 (mở app khác sẽ đóng app trước) | |
@@ -240,6 +316,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 - [`appstore/apps/counter`](../appstore/apps/counter): UI, sự kiện, timer, `gach.storage`.
 - [`appstore/apps/world_clock`](../appstore/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
 - [`appstore/apps/game2048`](../appstore/apps/game2048) (SDK v3): game 2048 với `on_swipe`, bàn cờ vuông co giãn theo màn hình, lưu ván đang chơi và điểm cao nhất.
+- [`appstore/apps/uikit`](../appstore/apps/uikit) (SDK v6): UI Kit, trưng bày nút nhiều kiểu, nhập liệu, sự kiện, alert/toast, hiệu ứng; dòng cuối hiện sự kiện vừa xảy ra.
 - [`appstore/apps/weather`](../appstore/apps/weather) (SDK v5): thời tiết qua Wi-Fi (Open-Meteo): nhiệt độ, cảm giác như, độ ẩm, gió, UV, xác suất mưa, dự báo theo giờ / 7 ngày, mặt trời mọc/lặn. Dùng `net.get`, `json.decode`, icon vẽ bằng `box` + `set_pos`.
 - [`appstore/apps/sysmon`](../appstore/apps/sysmon) (SDK v4): System Monitor. Dashboard tải CPU từng core, RAM/PSRAM/heap LVGL, firmware/thẻ SD, nhiệt độ, Wi-Fi, cập nhật mỗi giây bằng `gach.sys.stats()` cùng `arc`, `bar`, `chart`.
 - [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v3): máy tính kiểu điện thoại / máy tính bảng. Dùng `screen_size()` để chọn bố cục (màn rộng có thêm phím khoa học và lịch sử), lưu lịch sử bằng `gach.storage` dạng bộ đệm vòng, và vẽ ký hiệu `÷` bằng `box`.
@@ -253,6 +330,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 | 3 | Co giãn theo màn hình: app `sdk=3` dùng dp và font co giãn; `screen_size`, `on_swipe` (vuốt) |
 | 4 | `sys.stats()` (CPU, bộ nhớ, lưu trữ, nhiệt độ, Wi-Fi); widget `bar`, `arc`, `chart` + `chart_series`/`chart_push`, `set_value`, `set_accent` |
 | 5 | `net.get` (HTTP/HTTPS, quyền `network`), `json.decode`, `ui.set_pos` |
+| 6 | `ui.on`/`off` (đa sự kiện), nút `variant`/`size`/`icon`/`shape`, `textfield` + bàn phím hệ thống, `switch`, `checkbox`, `segmented`, `dropdown`, `spinner`, `get_value`/`get_text`, `set_enabled`/`set_visible`, `alert`, `toast`, `style`, `animate`, thêm `SYMBOL`; giới hạn 256 widget |
 
 - Runtime từ chối gói có `sdk` lớn hơn `gach.sdk_version` của máy.
 - API đã phát hành **không bao giờ bị xóa hay đổi nghĩa**; SDK mới chỉ thêm API. App viết cho `sdk=1` chạy được trên mọi bản gach-os về sau.

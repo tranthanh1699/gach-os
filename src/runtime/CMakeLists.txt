@@ -8,6 +8,7 @@ idf_component_register(SRCS "src/arena_allocator.cpp"
                             "src/runtime.cpp"
                             "src/script_app.cpp"
                             "src/script_host.cpp"
+                            "src/script_ui.cpp"
                        INCLUDE_DIRS "include"
                        PRIV_INCLUDE_DIRS "src"
                        REQUIRES common

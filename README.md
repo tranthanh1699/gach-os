@@ -19,7 +19,7 @@ Nền tảng: **ESP-IDF** · **LVGL 9** · **C++17** · build bằng **Docker** 
 | Board | JC8012P4A1C – ESP32-P4 10.1" JD9365 MIPI-DSI 800x1280 chạy ngang 1280x800, GSL3680, Wi-Fi qua ESP32-C6, PSRAM 32 MB |
 | Framework | AppManager (vòng đời + back-stack), Shell (status bar + nav bar), Services (Wi-Fi, thời gian), LVGL port |
 | Ứng dụng | Launcher nhiều trang (vuốt ngang), Apps, Stopwatch, Touch test, System info, Settings (Wi-Fi, độ sáng, múi giờ) |
-| App cài thêm | Gói `.gapp` (Lua 5.4, gach SDK v5) cài từ thẻ SD hoặc qua cáp bằng `tools/gach` (tối đa 128 app), app **Apps** quản lý cài/gỡ, sandbox + giới hạn RAM/thời gian – [docs/sdk.md](docs/sdk.md) |
+| App cài thêm | Gói `.gapp` (Lua 5.4, gach SDK v6) cài từ thẻ SD hoặc qua cáp bằng `tools/gach` (tối đa 128 app), app **Apps** quản lý cài/gỡ, sandbox + giới hạn RAM/thời gian – [docs/sdk.md](docs/sdk.md) |
 | Mạng & giờ | Wi-Fi STA, giờ chuẩn từ NTP Google (`time.google.com`), chọn múi giờ trong Settings (mặc định UTC+7), lưu NVS |
 | Cưỡng chế kiến trúc | `tools/layer_check.py` + ESP-IDF component REQUIRES |
 

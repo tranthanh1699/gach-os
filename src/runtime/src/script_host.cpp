@@ -486,6 +486,9 @@ struct ScriptHost::Sdk {
 
     static int button(lua_State* p_lua)
     {
+        if (lua_istable(p_lua, 2)) {
+            return ui_button_v6(p_lua); // SDK v6: button(parent, {text=, icon=, variant=, size=...}, fn)
+        }
         lv_obj_t* const p_parent = object(p_lua, 1);
         const char* const p_text = luaL_checkstring(p_lua, 2);
         lv_obj_t* const p_btn = lv_button_create(p_parent);
@@ -753,6 +756,18 @@ struct ScriptHost::Sdk {
             {"PAUSE", LV_SYMBOL_PAUSE},   {"STOP", LV_SYMBOL_STOP},     {"BELL", LV_SYMBOL_BELL},
             {"WIFI", LV_SYMBOL_WIFI},     {"TRASH", LV_SYMBOL_TRASH},   {"EDIT", LV_SYMBOL_EDIT},
             {"BACKSPACE", LV_SYMBOL_BACKSPACE}, {"WARNING", LV_SYMBOL_WARNING},
+            // SDK v6
+            {"EYE_OPEN", LV_SYMBOL_EYE_OPEN}, {"EYE_CLOSE", LV_SYMBOL_EYE_CLOSE}, {"LIST", LV_SYMBOL_LIST},
+            {"IMAGE", LV_SYMBOL_IMAGE},   {"AUDIO", LV_SYMBOL_AUDIO},   {"VIDEO", LV_SYMBOL_VIDEO},
+            {"SAVE", LV_SYMBOL_SAVE},     {"COPY", LV_SYMBOL_COPY},     {"CUT", LV_SYMBOL_CUT},
+            {"PASTE", LV_SYMBOL_PASTE},   {"DOWNLOAD", LV_SYMBOL_DOWNLOAD}, {"UPLOAD", LV_SYMBOL_UPLOAD},
+            {"FILE", LV_SYMBOL_FILE},     {"FOLDER", LV_SYMBOL_DIRECTORY}, {"SD_CARD", LV_SYMBOL_SD_CARD},
+            {"POWER", LV_SYMBOL_POWER},   {"CHARGE", LV_SYMBOL_CHARGE}, {"BATTERY", LV_SYMBOL_BATTERY_FULL},
+            {"BLUETOOTH", LV_SYMBOL_BLUETOOTH}, {"GPS", LV_SYMBOL_GPS}, {"USB", LV_SYMBOL_USB},
+            {"ENVELOPE", LV_SYMBOL_ENVELOPE}, {"CALL", LV_SYMBOL_CALL}, {"KEYBOARD", LV_SYMBOL_KEYBOARD},
+            {"VOLUME", LV_SYMBOL_VOLUME_MAX}, {"MUTE", LV_SYMBOL_MUTE}, {"PREV", LV_SYMBOL_PREV},
+            {"NEXT", LV_SYMBOL_NEXT},     {"SHUFFLE", LV_SYMBOL_SHUFFLE}, {"LOOP", LV_SYMBOL_LOOP},
+            {"BARS", LV_SYMBOL_BARS},     {"DRIVE", LV_SYMBOL_DRIVE},   {"TINT", LV_SYMBOL_TINT},
         };
         lua_createtable(p_lua, 0, static_cast<int>(sizeof(SYMBOLS) / sizeof(SYMBOLS[0])));
         for (const auto& symbol : SYMBOLS) {
@@ -1072,15 +1087,14 @@ struct ScriptHost::Sdk {
     static int set_value(lua_State* p_lua)
     {
         lv_obj_t* const p_obj = object(p_lua, 1);
-        const auto value = static_cast<int32_t>(luaL_checknumber(p_lua, 2));
         if (lv_obj_check_type(p_obj, &lv_arc_class)) {
-            lv_arc_set_value(p_obj, value);
+            lv_arc_set_value(p_obj, static_cast<int32_t>(luaL_checknumber(p_lua, 2)));
         } else if (lv_obj_check_type(p_obj, &lv_slider_class)) {
-            lv_slider_set_value(p_obj, value, LV_ANIM_OFF);
+            lv_slider_set_value(p_obj, static_cast<int32_t>(luaL_checknumber(p_lua, 2)), LV_ANIM_OFF);
         } else if (lv_obj_check_type(p_obj, &lv_bar_class)) {
-            lv_bar_set_value(p_obj, value, LV_ANIM_OFF);
-        } else {
-            return luaL_argerror(p_lua, 1, "expected bar, arc or slider");
+            lv_bar_set_value(p_obj, static_cast<int32_t>(luaL_checknumber(p_lua, 2)), LV_ANIM_OFF);
+        } else if (!set_value_v6(p_lua, p_obj, 2)) { // SDK v6: switch, checkbox, dropdown, segmented, textfield.
+            return luaL_argerror(p_lua, 1, "widget has no value");
         }
         return 0;
     }
@@ -1363,6 +1377,7 @@ struct ScriptHost::Sdk {
         lua_newtable(p_lua);
         add_table(p_lua, "ui", UI);
         (void)lua_getfield(p_lua, -1, "ui");
+        register_ui_v6(p_lua);
         push_symbols(p_lua);
         lua_setfield(p_lua, -2, "SYMBOL");
         lua_pop(p_lua, 1);
@@ -1392,12 +1407,50 @@ struct ScriptHost::Sdk {
     }
 };
 
+// ---- Cầu nối cho script_ui.cpp (SDK v6) ----
+ScriptHost* ScriptHost::from_lua(lua_State* p_lua)
+{
+    return host_of(p_lua);
+}
+
+lv_obj_t* ScriptHost::object_arg(lua_State* p_lua, int arg)
+{
+    return Sdk::object(p_lua, arg);
+}
+
+int ScriptHost::push_object(lua_State* p_lua, lv_obj_t* p_obj, int callback_arg, lv_event_code_t code)
+{
+    return Sdk::push_new(p_lua, p_obj, callback_arg, code);
+}
+
+int32_t ScriptHost::dp(lua_State* p_lua, lua_Integer value)
+{
+    return Sdk::to_px(p_lua, value);
+}
+
+int32_t ScriptHost::length_arg(lua_State* p_lua, int arg)
+{
+    return Sdk::length_arg(p_lua, arg);
+}
+
+const lv_font_t* ScriptHost::font_named(lua_State* p_lua, const char* p_size)
+{
+    fw::theme::FontSize size = fw::theme::FontSize::SMALL;
+    if (std::strcmp(p_size, "large") == 0) {
+        size = fw::theme::FontSize::LARGE;
+    } else if (std::strcmp(p_size, "medium") == 0) {
+        size = fw::theme::FontSize::MEDIUM;
+    }
+    return Sdk::font_for(p_lua, size);
+}
+
 // ============================================================================
 // ScriptHost
 // ============================================================================
 ScriptHost::ScriptHost()
     : m_p_fs(nullptr), m_arena{nullptr, 0U}, m_p_lua(nullptr), m_p_apps(nullptr), m_p_services(nullptr),
-      m_p_root(nullptr), m_manifest{}, m_objects{}, m_refs{}, m_timers{}, m_p_http(nullptr), m_p_net_timer(nullptr),
+      m_p_root(nullptr), m_manifest{}, m_objects{}, m_refs{}, m_timers{}, m_widget_kind{}, m_anim_refs{},
+      m_bindings{}, m_p_keyboard(nullptr), m_p_alert(nullptr), m_alert_ref(LUA_NOREF), m_p_toast(nullptr), m_p_http(nullptr), m_p_net_timer(nullptr),
       m_net_ref(LUA_NOREF), m_app_ref(LUA_NOREF),
       m_load_handle(hal::INVALID_FILE), m_deadline(0U), m_in_call(false), m_faulted(false), m_exit_pending(false),
       m_exiting(false), m_error{}
@@ -1488,6 +1541,7 @@ void ScriptHost::resume()
 
 void ScriptHost::pause()
 {
+    close_system_ui(); // Không để bàn phím / hộp thoại của app nổi trên app khác.
     (void)call_app("on_pause", nullptr, nullptr);
     set_timers_paused(true);
 }
@@ -1495,6 +1549,9 @@ void ScriptHost::pause()
 bool ScriptHost::back()
 {
     bool handled = false;
+    if (dismiss_system_ui()) {
+        return true;
+    }
     if (!m_exiting) {
         (void)call_app("on_back", nullptr, &handled);
     }
@@ -1517,6 +1574,8 @@ int32_t ScriptHost::register_object(lv_obj_t* p_obj)
         if (m_objects[index] == nullptr) {
             m_objects[index] = p_obj;
             m_refs[index] = LUA_NOREF;
+            m_widget_kind[index] = 0U;
+            m_anim_refs[index] = LUA_NOREF;
             const auto handle = static_cast<int32_t>(index + 1U);
             lv_obj_set_user_data(p_obj, reinterpret_cast<void*>(static_cast<intptr_t>(handle)));
             lv_obj_add_event_cb(p_obj, &ScriptHost::on_lv_event, LV_EVENT_DELETE, this);
@@ -1603,6 +1662,10 @@ void ScriptHost::fault(const char* p_message)
 
 void ScriptHost::close_vm()
 {
+    close_system_ui(); // Bàn phím / hộp thoại / toast nằm trên top layer: không bị xóa cùng root của app.
+    for (EventBinding& binding : m_bindings) {
+        binding = EventBinding{0, 0U, LUA_NOREF};
+    }
     // Yêu cầu HTTP đang chạy vẫn tiếp tục ở platform; kết quả bị bỏ ở lần gach.net.get kế tiếp.
     if (m_p_net_timer != nullptr) {
         lv_timer_delete(m_p_net_timer);
@@ -1668,6 +1731,7 @@ void ScriptHost::on_lv_event(lv_event_t* p_event)
     const lv_event_code_t code = lv_event_get_code(p_event);
     const int ref = p_host->m_refs[handle - 1];
     if (code == LV_EVENT_DELETE) {
+        p_host->release_object_extras(handle, p_obj);
         p_host->m_objects[handle - 1] = nullptr;
         p_host->m_refs[handle - 1] = LUA_NOREF;
         if ((p_host->m_p_lua != nullptr) && (ref != LUA_NOREF)) {

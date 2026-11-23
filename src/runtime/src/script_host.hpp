@@ -32,7 +32,8 @@ namespace runtime {
 /** @brief Máy ảo Lua dùng chung cho mọi app script. */
 class ScriptHost : private common::NonCopyable {
 public:
-    static constexpr size_t MAX_OBJECTS = 96U;    /**< Số widget tối đa một app tạo ra. */
+    static constexpr size_t MAX_OBJECTS = 256U;   /**< Số widget tối đa một app tạo ra (bảng nằm trong PSRAM). */
+    static constexpr size_t MAX_BINDINGS = 256U;  /**< Số cặp (widget, sự kiện) gắn bằng gach.ui.on (SDK v6). */
     static constexpr size_t MAX_TIMERS = 8U;      /**< Số timer đồng thời tối đa. */
     static constexpr uint32_t CALL_BUDGET_MS = 500U;
     static constexpr size_t ERROR_BUF_LEN = 160U;
@@ -61,6 +62,39 @@ public:
 
 private:
     struct Sdk; // Bindings Lua (định nghĩa trong .cpp, truy cập thành viên private).
+    friend struct UiV6; // Bindings SDK v6 (script_ui.cpp).
+
+    /** @brief Một callback gach.ui.on: (widget, loại sự kiện) -> hàm Lua. handle = 0 là ô trống. */
+    struct EventBinding {
+        int16_t handle;
+        uint8_t kind;
+        int ref;
+    };
+
+    // ---- Cầu nối dùng chung giữa script_host.cpp và script_ui.cpp ----
+    static ScriptHost* from_lua(lua_State* p_lua);
+    static lv_obj_t* object_arg(lua_State* p_lua, int arg);
+    static int push_object(lua_State* p_lua, lv_obj_t* p_obj, int callback_arg, lv_event_code_t code);
+    static int32_t dp(lua_State* p_lua, lua_Integer value);
+    static int32_t length_arg(lua_State* p_lua, int arg);
+    static const lv_font_t* font_named(lua_State* p_lua, const char* p_size);
+
+    // ---- SDK v6 (script_ui.cpp) ----
+    static void register_ui_v6(lua_State* p_lua); /**< Thêm hàm v6 vào bảng gach.ui đang ở đỉnh stack. */
+    static int ui_button_v6(lua_State* p_lua);     /**< gach.ui.button(parent, {opts}, fn). */
+    static bool set_value_v6(lua_State* p_lua, lv_obj_t* p_obj, int arg); /**< set_value cho widget v6. */
+    void release_object_extras(int32_t handle, lv_obj_t* p_obj);
+    void close_system_ui();
+    bool dismiss_system_ui(); /**< Back: đóng bàn phím / hộp thoại nếu đang mở. */
+    void push_event_arg(lv_obj_t* p_obj, uint8_t kind, int& nargs);
+    static void on_ui_event(lv_event_t* p_event);
+    static void on_alert_button(lv_event_t* p_event);
+    static void on_keyboard_event(lv_event_t* p_event);
+    static void on_field_event(lv_event_t* p_event);
+    static void on_toast_deleted(lv_event_t* p_event);
+    static void on_anim_done(lv_anim_t* p_anim);
+    void show_keyboard(lv_obj_t* p_field);
+    void hide_keyboard();
 
     struct TimerSlot {
         lv_timer_t* p_timer;
@@ -96,6 +130,13 @@ private:
     lv_obj_t* m_objects[MAX_OBJECTS];
     int m_refs[MAX_OBJECTS];
     TimerSlot m_timers[MAX_TIMERS];
+    uint8_t m_widget_kind[MAX_OBJECTS]; /**< Loại widget v6 tự dựng (segmented, textfield...) để đọc/ghi giá trị. */
+    int m_anim_refs[MAX_OBJECTS];       /**< Callback done của gach.ui.animate đang chạy. */
+    EventBinding m_bindings[MAX_BINDINGS];
+    lv_obj_t* m_p_keyboard; /**< Bàn phím hệ thống (top layer), tạo khi textfield đầu tiên được chạm. */
+    lv_obj_t* m_p_alert;
+    int m_alert_ref;
+    lv_obj_t* m_p_toast;
     hal::IHttpClient* m_p_http;
     lv_timer_t* m_p_net_timer; /**< Hỏi trạng thái yêu cầu gach.net.get đang chạy. */
     int m_net_ref;             /**< Callback Lua của yêu cầu đang chạy. */
