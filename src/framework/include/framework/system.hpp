@@ -14,6 +14,30 @@ struct Devices;
 
 namespace fw {
 
+/** @brief Số liệu hiệu năng vẽ của LVGL trong một cửa sổ đo (từ lần reset gần nhất). */
+struct PerfStats {
+    uint32_t window_ms;   /**< Độ dài cửa sổ đo. */
+    uint32_t frames;      /**< Số lần LVGL vẽ lại (refresh có vùng bẩn). */
+    uint32_t render_us;   /**< Tổng thời gian vẽ (gồm cả flush, vì flush chạy đồng bộ trong lúc vẽ). */
+    uint32_t flush_us;    /**< Tổng thời gian đẩy pixel lên màn hình (IDisplay::draw_bitmap). */
+    uint32_t flush_count; /**< Số lần flush (số dải vẽ). */
+    uint32_t flushed_px;  /**< Tổng số pixel đã đẩy. */
+    uint32_t max_frame_us; /**< Khung chậm nhất. */
+};
+
+/**
+ * @brief Đọc số liệu hiệu năng. Gọi khi giữ UiLock (hoặc từ task UI).
+ * @param[out] out   Số liệu.
+ * @param[in]  reset true -> bắt đầu cửa sổ đo mới.
+ */
+void perf_snapshot(PerfStats& out, bool reset);
+
+/**
+ * @brief Benchmark: vẽ lại toàn màn hình `rounds` lần ngay lập tức, trả số liệu của riêng các lần đó.
+ *        Gọi khi giữ UiLock. Chặn UI trong lúc chạy (~rounds x thời gian một khung).
+ */
+void perf_bench(uint32_t rounds, PerfStats& out);
+
 /** @return App manager toàn cục – dùng để đăng ký app trước khi start(). */
 AppManager& app_manager();
 

@@ -68,6 +68,16 @@ constexpr Gsl3680Config TOUCH{
 // Slot 1 của cùng controller do esp_hosted dùng cho ESP32-C6 (CLK18 CMD19 D0-D3 14-17, RST 54).
 constexpr esp32_mcal::SdmmcConfig SD_CARD{SDMMC_HOST_SLOT_0, 4U, SDMMC_FREQ_HIGHSPEED, 4 /*LDO_VO4*/};
 
+// ---- Buffer vẽ giao diện (LVGL partial render) ----
+// Đo bằng `gach perf bench` (vẽ lại toàn màn 1280x716): 2 buffer x 16 dòng ở RAM nội là tối ưu
+// (launcher 70.8 -> 32.6 ms, Stopwatch 53.2 -> 21.7 ms so với 1 buffer 24 KB đồng bộ):
+//  - CPU vẽ buffer này trong lúc PPA xoay buffer kia (flush bất đồng bộ).
+//  - Tổng buffer vượt ~82 KB (cache dữ liệu L1 64 KB của P4) thì PPA chậm đi 2-3 lần: không tăng thêm.
+//  - PSRAM chậm hơn RAM nội; 2 draw unit LVGL (2 core) chỉ lợi < 8 % -> không dùng.
+constexpr uint32_t DRAW_BUFFER_LINES = 16U;
+constexpr size_t DRAW_BUFFER_COUNT_USED = 2U;      /**< 2 = double buffering (màn hình hỗ trợ flush bất đồng bộ). */
+constexpr bool DRAW_BUFFER_PREFER_INTERNAL = true; /**< RAM nội trước, PSRAM dự phòng. */
+
 // ---- Vùng RAM cho máy ảo app cài thêm (Lua): PSRAM dư dả ----
 constexpr size_t APP_ARENA_BYTES = 1024U * 1024U;
 

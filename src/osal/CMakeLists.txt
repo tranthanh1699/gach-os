@@ -5,6 +5,6 @@ endif()
 
 idf_component_register(SRCS "port/${OSAL_PORT}/osal_${OSAL_PORT}.cpp"
                        INCLUDE_DIRS "include"
-                       REQUIRES common freertos)
+                       REQUIRES common freertos esp_timer)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE ${OS_STRICT_FLAGS})

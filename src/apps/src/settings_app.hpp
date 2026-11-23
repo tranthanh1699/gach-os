@@ -73,6 +73,7 @@ private:
     static void on_about_clicked(lv_event_t* p_event);
     static void on_restart_clicked(lv_event_t* p_event);
     static void on_brightness_changed(lv_event_t* p_event);
+    static void on_perf_overlay_changed(lv_event_t* p_event);
     static void on_timezone_changed(lv_event_t* p_event);
     static void on_dialog_confirm(lv_event_t* p_event);
     static void on_dialog_cancel(lv_event_t* p_event);

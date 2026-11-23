@@ -10,6 +10,7 @@
 
 #include "hal_api/backlight.hpp"
 #include "hal_api/clock.hpp"
+#include "hal_api/debug_port.hpp"
 #include "hal_api/display.hpp"
 #include "hal_api/filesystem.hpp"
 #include "hal_api/storage.hpp"
@@ -25,6 +26,9 @@ struct MemoryRegion {
     size_t size;
 };
 
+/** @brief Số buffer vẽ tối đa (2 = double buffering: vẽ buffer này trong lúc đẩy buffer kia lên màn hình). */
+constexpr size_t DRAW_BUFFER_COUNT = 2U;
+
 /** @brief Tập thiết bị mà board cung cấp cho OS. Con trỏ NULL = board không có thiết bị đó. */
 struct Devices {
     const char* p_board_name; /**< Tên board hiển thị. */
@@ -37,6 +41,12 @@ struct Devices {
     IClock* p_clock;          /**< Tùy chọn: giờ thực (SNTP). */
     IFileSystem* p_fs;        /**< Tùy chọn: bộ nhớ ngoài chứa app cài thêm (thẻ SD). */
     MemoryRegion app_arena;   /**< Vùng RAM dành riêng cho máy ảo app cài thêm ({nullptr,0} = không hỗ trợ). */
+    IDebugPort* p_debug_port; /**< Tùy chọn: cổng debug bridge tới máy tính (tool `gach`). */
+    /**
+     * Buffer vẽ của giao diện (RGB565, căn 4 byte). Bắt buộc buffer 0; buffer 1 tùy chọn (double buffering, chỉ
+     * có lợi khi IDisplay hỗ trợ flush bất đồng bộ). Càng lớn càng ít lần chia nhỏ màn hình khi vẽ lại.
+     */
+    MemoryRegion draw_buffers[DRAW_BUFFER_COUNT];
 };
 
 /**

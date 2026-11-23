@@ -61,6 +61,18 @@ common::Status uninstall(const char* p_id);
 /** @return Mô tả lỗi gần nhất (chuỗi rỗng nếu không có). */
 const char* last_error();
 
+/**
+ * @brief Khởi động debug bridge (tool `gach` trên máy tính: cài app, shell, đẩy/kéo file, logcat).
+ * @return ERR_NOT_SUPPORTED nếu board không có cổng debug.
+ */
+common::Status bridge_start(const hal::Devices& devices);
+
+/**
+ * @brief Gửi một đoạn log qua bridge (gọi từ hook log của platform, mọi task).
+ * @return false nếu không có máy tính đang kết nối -> người gọi tự in log dạng chữ thô.
+ */
+bool bridge_log(const char* p_text, size_t len);
+
 } // namespace runtime
 
 #endif /* RUNTIME_RUNTIME_HPP */

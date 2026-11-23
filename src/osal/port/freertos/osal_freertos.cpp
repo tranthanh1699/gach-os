@@ -4,6 +4,7 @@
  */
 #include "osal/osal.hpp"
 
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/task.h"
@@ -27,6 +28,11 @@ TickType_t to_ticks(uint32_t ms)
 uint32_t tick_ms()
 {
     return static_cast<uint32_t>(xTaskGetTickCount() * portTICK_PERIOD_MS);
+}
+
+uint32_t time_us()
+{
+    return static_cast<uint32_t>(esp_timer_get_time());
 }
 
 void delay_ms(uint32_t ms)

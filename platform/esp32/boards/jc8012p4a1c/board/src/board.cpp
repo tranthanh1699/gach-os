@@ -11,8 +11,10 @@
 #include "esp32_mcal/esp32_pwm.hpp"
 #include "esp32_mcal/esp32_sd_filesystem.hpp"
 #include "esp32_mcal/esp32_system.hpp"
+#include "esp32_mcal/esp32_uart_debug_port.hpp"
 #include "esp32_mcal/esp32_wifi.hpp"
 #include "esp_heap_caps.h"
+#include "esp_memory_utils.h"
 #include "esp_log.h"
 #include "gsl3680_touch.hpp"
 #include "jd9365_display.hpp"
@@ -29,6 +31,7 @@ esp32_mcal::Esp32System s_system;
 esp32_mcal::Esp32NvsStore s_storage;
 esp32_mcal::Esp32Wifi s_wifi;
 esp32_mcal::Esp32Clock s_clock;
+esp32_mcal::Esp32UartDebugPort s_debug_port; // Cáp USB-serial: tool `gach` (debug bridge).
 
 // Panel/touch gắn chặt SDK (MIPI-DSI, PPA, esp_lcd_touch) -> hiện thực ở board, không ở drivers/.
 board::Jd9365Display s_display{board::cfg::DISPLAY};
@@ -38,7 +41,22 @@ drivers::PwmBacklight s_backlight{s_backlight_pwm, board::cfg::BACKLIGHT_ACTIVE_
 
 // Display/touch init bởi framework (fw::start) trong UI task.
 hal::Devices s_devices{board::cfg::BOARD_NAME, &s_display, &s_touch, nullptr, &s_system, nullptr, nullptr, nullptr,
-                       nullptr, hal::MemoryRegion{nullptr, 0U}};
+                       nullptr, hal::MemoryRegion{nullptr, 0U}, &s_debug_port};
+
+constexpr size_t DRAW_BUFFER_ALIGN = 64U; /**< Căn theo cache line: CPU vẽ, PPA đọc bằng DMA. */
+constexpr size_t RGB565_BYTES = 2U;
+
+/** @brief Cấp một buffer vẽ (RAM nội hoặc PSRAM theo cấu hình), nullptr nếu hết bộ nhớ. */
+void* allocate_draw_buffer(size_t bytes)
+{
+    constexpr uint32_t INTERNAL = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    constexpr uint32_t PSRAM = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+    void* p_buf = nullptr;
+    if (board::cfg::DRAW_BUFFER_PREFER_INTERNAL) {
+        p_buf = heap_caps_aligned_alloc(DRAW_BUFFER_ALIGN, bytes, INTERNAL);
+    }
+    return (p_buf != nullptr) ? p_buf : heap_caps_aligned_alloc(DRAW_BUFFER_ALIGN, bytes, PSRAM);
+}
 
 /** @return true nếu thiết bị tùy chọn init thành công; lỗi chỉ cảnh báo. */
 bool optional(common::Status status, const char* p_what)
@@ -83,6 +101,18 @@ const Devices& board_init()
     if (sd_ok) {
         s_devices.p_fs = &s_sd;
     }
+
+    // Buffer vẽ: dải ngang DRAW_BUFFER_LINES dòng theo chiều rộng logic (sau xoay).
+    const size_t draw_bytes = static_cast<size_t>(s_display.width()) * DRAW_BUFFER_LINES * RGB565_BYTES;
+    for (size_t index = 0U; index < DRAW_BUFFER_COUNT_USED; ++index) {
+        void* const p_buf = allocate_draw_buffer(draw_bytes);
+        if (p_buf != nullptr) {
+            s_devices.draw_buffers[index] = hal::MemoryRegion{p_buf, draw_bytes};
+        }
+    }
+    ESP_LOGI(TAG, "Draw buffers: %u x %u B (%s)", static_cast<unsigned>(DRAW_BUFFER_COUNT_USED),
+             static_cast<unsigned>(draw_bytes),
+             esp_ptr_external_ram(s_devices.draw_buffers[0].p_base) ? "PSRAM" : "internal");
 
     // Board có PSRAM: arena Lua đặt ở PSRAM, nhường RAM nội cho LVGL/Wi-Fi.
     void* const p_arena = heap_caps_malloc(APP_ARENA_BYTES, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);

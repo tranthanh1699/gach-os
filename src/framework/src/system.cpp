@@ -65,7 +65,7 @@ common::Status init_ui(const hal::Devices& devices)
     }
     s_services.bind(devices);
 
-    status = s_port.init(*devices.p_display, p_touch);
+    status = s_port.init(*devices.p_display, p_touch, devices.draw_buffers);
     if (!common::is_ok(status)) {
         return status;
     }

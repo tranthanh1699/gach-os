@@ -26,10 +26,16 @@ CONFIG_CACHE_L2_CACHE_LINE_128B=y
 
 # ---- LVGL: màn lớn -> heap LVGL lớn hơn board 320x240 ----
 CONFIG_LV_MEM_SIZE_KILOBYTES=128
+# Nhịp refresh ~60 Hz (mặc định chung 20 ms = 50 Hz).
+CONFIG_LV_DEF_REFR_PERIOD=16
 # UI co giãn 150%: theme chọn font gần nhất 14/20/28 x 1.5 -> 22/30/42 (font nằm trong flash).
 CONFIG_LV_FONT_MONTSERRAT_22=y
 CONFIG_LV_FONT_MONTSERRAT_30=y
 CONFIG_LV_FONT_MONTSERRAT_42=y
+# Đo hiệu năng: FPS + CPU% của LVGL ở góc dưới phải (tắt/bật trong Settings > Display & Brightness).
+CONFIG_LV_USE_SYSMON=y
+CONFIG_LV_USE_PERF_MONITOR=y
+CONFIG_LV_PERF_MONITOR_ALIGN_BOTTOM_RIGHT=y
 
 # ---- Wi-Fi qua ESP32-C6 (esp_hosted, SDIO 4-bit, slot 1) ----
 CONFIG_SLAVE_IDF_TARGET_ESP32C6=y

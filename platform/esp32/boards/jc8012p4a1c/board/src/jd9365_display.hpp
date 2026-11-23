@@ -58,10 +58,15 @@ public:
     uint16_t height() const override;
     hal::PixelFormat pixel_format() const override { return hal::PixelFormat::RGB565; }
     common::Status draw_bitmap(const hal::Area& area, const uint16_t* p_pixels) override;
+    bool supports_async_flush() const override { return true; }
+    common::Status draw_bitmap_async(const hal::Area& area, const uint16_t* p_pixels, hal::FlushDoneCallback on_done,
+                                     void* p_ctx) override;
 
 private:
     common::Status init_panel();
     common::Status init_rotator();
+    common::Status rotate(const hal::Area& area, const uint16_t* p_pixels, bool is_async);
+    static bool on_ppa_done(ppa_client_handle_t p_client, ppa_event_data_t* p_event, void* p_user_data);
 
     const Jd9365Config m_cfg;
     esp_ldo_channel_handle_t m_p_phy_ldo;
@@ -71,6 +76,8 @@ private:
     ppa_client_handle_t m_p_ppa;
     void* m_p_frame_buffer;
     size_t m_frame_buffer_bytes;
+    hal::FlushDoneCallback volatile m_on_done; /**< Lần đẩy bất đồng bộ đang chạy (đọc trong ISR). */
+    void* volatile m_p_done_ctx;
 };
 
 } // namespace board

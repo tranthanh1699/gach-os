@@ -33,6 +33,11 @@ constexpr int32_t SIDEBAR_WIDTH_PCT = 36;        /**< Sidebar chiếm ~1/3 màn 
 constexpr int32_t SPLIT_DIVIDER_WIDTH = 1;       /**< dp */
 constexpr int32_t TIMEZONE_DROPDOWN_WIDTH = 130; /**< dp */
 constexpr const char* SOFTWARE_NAME = "gach-os";
+constexpr int32_t PERF_SWITCH_WIDTH = 40;  /**< dp */
+constexpr int32_t PERF_SWITCH_HEIGHT = 22; /**< dp */
+#if LV_USE_PERF_MONITOR
+bool s_is_perf_overlay_visible = true; // LVGL bật sẵn lớp đo khi tạo display.
+#endif
 
 // Màu icon theo thói quen iOS.
 constexpr uint32_t ICON_WIFI = 0x0A84FFU;
@@ -281,6 +286,36 @@ void SettingsApp::build_display(lv_obj_t* p_page)
         lv_obj_add_state(p_slider, LV_STATE_DISABLED);
     }
     update_brightness_value(services.brightness());
+
+#if LV_USE_PERF_MONITOR
+    // Lớp đo hiệu năng của LVGL (FPS, CPU%, thời gian vẽ) – chỉ có khi firmware bật LV_USE_PERF_MONITOR.
+    glist::section_header(p_page, "DEVELOPER");
+    lv_obj_t* const p_dev_group = glist::group(p_page);
+    lv_obj_t* const p_perf_row =
+        lv_obj_get_parent(glist::row(p_dev_group, nullptr, 0U, "Performance Overlay", nullptr, nullptr));
+    lv_obj_t* const p_switch = lv_switch_create(p_perf_row);
+    lv_obj_set_size(p_switch, fw::theme::px(PERF_SWITCH_WIDTH), fw::theme::px(PERF_SWITCH_HEIGHT));
+    lv_obj_set_style_bg_color(p_switch, lv_color_hex(glist::COLOR_ACCENT),
+                              static_cast<lv_style_selector_t>(LV_PART_INDICATOR) | LV_STATE_CHECKED);
+    if (s_is_perf_overlay_visible) {
+        lv_obj_add_state(p_switch, LV_STATE_CHECKED);
+    }
+    lv_obj_add_event_cb(p_switch, &SettingsApp::on_perf_overlay_changed, LV_EVENT_VALUE_CHANGED, this);
+#endif
+}
+
+void SettingsApp::on_perf_overlay_changed(lv_event_t* p_event)
+{
+#if LV_USE_PERF_MONITOR
+    s_is_perf_overlay_visible = lv_obj_has_state(lv_event_get_target_obj(p_event), LV_STATE_CHECKED);
+    if (s_is_perf_overlay_visible) {
+        lv_sysmon_show_performance(nullptr);
+    } else {
+        lv_sysmon_hide_performance(nullptr);
+    }
+#else
+    (void)p_event;
+#endif
 }
 
 void SettingsApp::build_date_time(lv_obj_t* p_page)

@@ -55,7 +55,7 @@ bool check(esp_err_t err, const char* p_what)
 
 Jd9365Display::Jd9365Display(const Jd9365Config& cfg)
     : m_cfg(cfg), m_p_phy_ldo(nullptr), m_p_dsi_bus(nullptr), m_p_io(nullptr), m_p_panel(nullptr), m_p_ppa(nullptr),
-      m_p_frame_buffer(nullptr), m_frame_buffer_bytes(0U)
+      m_p_frame_buffer(nullptr), m_frame_buffer_bytes(0U), m_on_done(nullptr), m_p_done_ctx(nullptr)
 {
 }
 
@@ -168,6 +168,11 @@ common::Status Jd9365Display::init_rotator()
     if (!check(ppa_register_client(&ppa_cfg, &m_p_ppa), "PPA client")) {
         return common::Status::ERR_IO;
     }
+    ppa_event_callbacks_t callbacks{};
+    callbacks.on_trans_done = &Jd9365Display::on_ppa_done;
+    if (!check(ppa_client_register_event_callbacks(m_p_ppa, &callbacks), "PPA callbacks")) {
+        return common::Status::ERR_IO;
+    }
     ESP_LOGI(TAG, "Panel %ux%u -> logical %ux%u", static_cast<unsigned>(m_cfg.panel_width),
              static_cast<unsigned>(m_cfg.panel_height), static_cast<unsigned>(width()),
              static_cast<unsigned>(height()));
@@ -175,6 +180,39 @@ common::Status Jd9365Display::init_rotator()
 }
 
 common::Status Jd9365Display::draw_bitmap(const hal::Area& area, const uint16_t* p_pixels)
+{
+    return rotate(area, p_pixels, false);
+}
+
+common::Status Jd9365Display::draw_bitmap_async(const hal::Area& area, const uint16_t* p_pixels,
+                                                hal::FlushDoneCallback on_done, void* p_ctx)
+{
+    if (on_done == nullptr) {
+        return common::Status::ERR_PARAM;
+    }
+    m_p_done_ctx = p_ctx;
+    m_on_done = on_done;
+    const common::Status status = rotate(area, p_pixels, true);
+    if (!common::is_ok(status)) {
+        m_on_done = nullptr; // Không khởi động được: hợp đồng HAL – on_done không được gọi.
+    }
+    return status;
+}
+
+bool Jd9365Display::on_ppa_done(ppa_client_handle_t p_client, ppa_event_data_t* p_event, void* p_user_data)
+{
+    (void)p_client;
+    (void)p_event;
+    auto* const p_self = static_cast<Jd9365Display*>(p_user_data);
+    const hal::FlushDoneCallback on_done = p_self->m_on_done;
+    p_self->m_on_done = nullptr;
+    if (on_done != nullptr) {
+        on_done(p_self->m_p_done_ctx); // ISR: framework chỉ đặt cờ flush_ready.
+    }
+    return false; // Không đánh thức task ưu tiên cao nào.
+}
+
+common::Status Jd9365Display::rotate(const hal::Area& area, const uint16_t* p_pixels, bool is_async)
 {
     if ((m_p_ppa == nullptr) || (p_pixels == nullptr)) {
         return common::Status::ERR_STATE;
@@ -197,7 +235,6 @@ common::Status Jd9365Display::draw_bitmap(const hal::Area& area, const uint16_t*
     op.in.block_offset_x = 0U;
     op.in.block_offset_y = 0U;
     op.in.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-
     op.out.buffer = m_p_frame_buffer;
     op.out.buffer_size = m_frame_buffer_bytes;
     op.out.pic_w = m_cfg.panel_width;
@@ -205,7 +242,6 @@ common::Status Jd9365Display::draw_bitmap(const hal::Area& area, const uint16_t*
     op.out.block_offset_x = static_cast<uint32_t>(origin.x);
     op.out.block_offset_y = static_cast<uint32_t>(origin.y);
     op.out.srm_cm = PPA_SRM_COLOR_MODE_RGB565;
-
     op.rotation_angle = to_ppa_angle(m_cfg.rotation);
     op.scale_x = PPA_SCALE_NONE;
     op.scale_y = PPA_SCALE_NONE;
@@ -213,7 +249,8 @@ common::Status Jd9365Display::draw_bitmap(const hal::Area& area, const uint16_t*
     op.mirror_y = false;
     op.rgb_swap = false;
     op.byte_swap = false;
-    op.mode = PPA_TRANS_MODE_BLOCKING;
+    op.mode = is_async ? PPA_TRANS_MODE_NON_BLOCKING : PPA_TRANS_MODE_BLOCKING;
+    op.user_data = is_async ? this : nullptr; // IDF: chế độ blocking yêu cầu user_data = NULL.
 
     // ESP-IDF >= 6.1 có workaround lỗi phần cứng DIG-734 (PPA SRM treo vĩnh viễn với một số kích thước khối).
     return check(ppa_do_scale_rotate_mirror(m_p_ppa, &op), "PPA rotate") ? common::Status::OK

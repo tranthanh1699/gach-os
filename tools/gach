@@ -1,0 +1,395 @@
+#!/usr/bin/env python3
+"""gach – debug bridge kiểu adb cho gach-os qua cáp USB-serial (cùng cổng dùng để nạp firmware).
+
+  tools/gach info                     Thông tin board
+  tools/gach apps                     App đã cài
+  tools/gach install app.gapp [...]   Đẩy gói vào /install rồi cài ngay (không cần rút thẻ SD)
+  tools/gach uninstall <id>           Gỡ app
+  tools/gach logcat                   Xem log liên tục (Ctrl-C để thoát)
+  tools/gach shell                    Shell tương tác (gõ help)
+  tools/gach push <local> <remote>    Chép file lên thẻ SD
+  tools/gach pull <remote> [local]    Lấy file từ thẻ SD về
+  tools/gach ls [dir] | rm <path> | mkdir <dir> | mem | reboot
+  tools/gach launch <app_id> | home | back   Điều khiển app từ xa (test tự động)
+  tools/gach perf [reset|bench]       Hiệu năng vẽ LVGL: fps, thời gian khung, phần flush; bench = vẽ lại cả màn 20 lần
+
+Cổng: -p /dev/ttyUSB0 (mặc định: biến GACH_PORT hoặc /dev/ttyUSB0). Chỉ dùng thư viện chuẩn Python (Linux/macOS).
+Giao thức: docs/debug_bridge.md – khung 0x00 | COBS(type id data crc16_le) | 0x00.
+"""
+from __future__ import annotations
+
+import argparse
+import os
+import queue
+import select
+import sys
+import termios
+import threading
+import time
+import tty
+from pathlib import Path
+
+# ---- Giao thức (khớp src/runtime/src/debug_bridge.cpp) ----
+TYPE_CMD, TYPE_DATA_IN, TYPE_ACK_IN, TYPE_PING = 0x01, 0x02, 0x03, 0x04
+TYPE_RESP, TYPE_DATA_OUT, TYPE_ACK_OUT, TYPE_LOG, TYPE_HELLO, TYPE_TEXT = 0x81, 0x82, 0x83, 0x84, 0x85, 0x86
+MAX_DATA = 256
+BAUD = termios.B115200
+PING_PERIOD_S = 1.0
+RESP_TIMEOUT_S = 20.0
+ACK_TIMEOUT_S = 3.0
+ACK_RETRIES = 3
+CONNECT_TIMEOUT_S = 3.0
+
+
+def crc16(data: bytes) -> int:
+    """CRC-16/CCITT-FALSE."""
+    crc = 0xFFFF
+    for byte in data:
+        crc ^= byte << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) if crc & 0x8000 else (crc << 1)
+            crc &= 0xFFFF
+    return crc
+
+
+def cobs_encode(data: bytes) -> bytes:
+    out = bytearray([0])
+    code_pos, code = 0, 1
+    for index, byte in enumerate(data):
+        if byte:
+            out.append(byte)
+            code += 1
+        if not byte or code == 0xFF:
+            out[code_pos] = code
+            code = 1
+            code_pos = len(out)
+            if not byte or index + 1 < len(data):
+                out.append(0)
+    if code_pos < len(out):
+        out[code_pos] = code
+    return bytes(out)
+
+
+def cobs_decode(data: bytes) -> bytes | None:
+    out = bytearray()
+    pos = 0
+    while pos < len(data):
+        code = data[pos]
+        pos += 1
+        if code == 0 or pos + code - 1 > len(data):
+            return None
+        out += data[pos:pos + code - 1]
+        pos += code - 1
+        if code != 0xFF and pos < len(data):
+            out.append(0)
+    return bytes(out)
+
+
+def encode_frame(ftype: int, fid: int, data: bytes = b"") -> bytes:
+    body = bytes([ftype, fid & 0xFF]) + data
+    crc = crc16(body)
+    return b"\x00" + cobs_encode(body + bytes([crc & 0xFF, crc >> 8])) + b"\x00"
+
+
+def decode_frame(chunk: bytes) -> tuple[int, int, bytes] | None:
+    payload = cobs_decode(chunk)
+    if payload is None or len(payload) < 4:
+        return None
+    body, crc = payload[:-2], payload[-2] | (payload[-1] << 8)
+    if crc16(body) != crc:
+        return None
+    return body[0], body[1], body[2:]
+
+
+class Link:
+    """Cổng serial + luồng đọc tách khung / chữ thô."""
+
+    def __init__(self, port: str, show_raw: bool = False):
+        # Không đụng DTR/RTS: mạch auto-reset trên board không bị kích (mở cổng không làm board khởi động lại).
+        self.fd = os.open(port, os.O_RDWR | os.O_NOCTTY)
+        attrs = termios.tcgetattr(self.fd)
+        tty.setraw(self.fd)
+        attrs = termios.tcgetattr(self.fd)
+        attrs[2] &= ~termios.HUPCL          # Đóng cổng không hạ DTR.
+        attrs[4] = attrs[5] = BAUD
+        termios.tcsetattr(self.fd, termios.TCSANOW, attrs)
+        termios.tcflush(self.fd, termios.TCIFLUSH)
+        self.frames: queue.Queue = queue.Queue()
+        self.show_raw = show_raw
+        self.log_sink = None                 # callable(str) khi đang logcat
+        self.next_id = 1
+        self.alive = True
+        self.write_lock = threading.Lock()
+        threading.Thread(target=self._reader, daemon=True).start()
+        threading.Thread(target=self._pinger, daemon=True).start()
+
+    def close(self) -> None:
+        self.alive = False
+        os.close(self.fd)
+
+    def send(self, ftype: int, fid: int, data: bytes = b"") -> None:
+        with self.write_lock:
+            os.write(self.fd, encode_frame(ftype, fid, data))
+
+    def new_id(self) -> int:
+        self.next_id = (self.next_id % 255) + 1
+        return self.next_id
+
+    def _pinger(self) -> None:
+        while self.alive:
+            try:
+                self.send(TYPE_PING, 0)
+            except OSError:
+                return
+            time.sleep(PING_PERIOD_S)
+
+    def _reader(self) -> None:
+        buf = bytearray()
+        while self.alive:
+            try:
+                ready, _, _ = select.select([self.fd], [], [], 0.2)
+                if not ready:
+                    continue
+                data = os.read(self.fd, 4096)
+            except OSError:
+                return
+            for byte in data:
+                if byte != 0:
+                    buf.append(byte)
+                    continue
+                if buf:
+                    self._dispatch(bytes(buf))
+                    buf.clear()
+
+    def _dispatch(self, chunk: bytes) -> None:
+        frame = decode_frame(chunk)
+        if frame is None:
+            text = chunk.decode("utf-8", "replace")
+            if self.log_sink:
+                self.log_sink(text)
+            elif self.show_raw:
+                sys.stderr.write(text)
+            return
+        ftype, fid, data = frame
+        if ftype == TYPE_LOG:
+            if self.log_sink:
+                self.log_sink(data.decode("utf-8", "replace"))
+            return
+        self.frames.put(frame)
+
+    def wait(self, accept, timeout: float) -> tuple[int, int, bytes] | None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                frame = self.frames.get(timeout=max(0.01, deadline - time.monotonic()))
+            except queue.Empty:
+                return None
+            if accept(frame):
+                return frame
+        return None
+
+    def connect(self) -> str:
+        fid = self.new_id()
+        self.send(TYPE_PING, fid)
+        frame = self.wait(lambda f: f[0] == TYPE_HELLO, CONNECT_TIMEOUT_S)
+        if frame is None:
+            raise SystemExit("gach: no response from device (firmware has the debug bridge? right port?)")
+        return frame[2].decode("utf-8", "replace")
+
+    def command(self, line: str, on_text=print, timeout: float = RESP_TIMEOUT_S) -> tuple[bool, str]:
+        """Gửi lệnh, in các dòng TEXT, trả (ok, chữ của RESP)."""
+        fid = self.new_id()
+        self.send(TYPE_CMD, fid, line.encode())
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            frame = self.wait(lambda f: f[1] == fid and f[0] in (TYPE_TEXT, TYPE_RESP), deadline - time.monotonic())
+            if frame is None:
+                break
+            ftype, _, data = frame
+            if ftype == TYPE_TEXT:
+                on_text(data.decode("utf-8", "replace"))
+            else:
+                return data[:1] == b"\x00", data[1:].decode("utf-8", "replace")
+        return False, "timeout waiting for device"
+
+    def push(self, local: Path, remote: str) -> tuple[bool, str]:
+        data = local.read_bytes()
+        ok, msg = self.command(f"push {remote} {len(data)}", timeout=5.0)
+        if not ok:
+            return ok, msg
+        start_id = None
+        for offset in range(0, len(data), MAX_DATA):
+            chunk = data[offset:offset + MAX_DATA]
+            fid = self.new_id()
+            start_id = start_id or fid
+            for _ in range(ACK_RETRIES):
+                self.send(TYPE_DATA_IN, fid, chunk)
+                ack = self.wait(lambda f, i=fid: f[0] == TYPE_ACK_OUT and f[1] == i, ACK_TIMEOUT_S)
+                if ack is not None:
+                    break
+            else:
+                return False, "no ack from device"
+            if ack[2][:1] != b"\x00":
+                return False, "device write failed"
+            done = min(offset + MAX_DATA, len(data))
+            if sys.stderr.isatty():
+                sys.stderr.write(f"\r  {local.name}: {done}/{len(data)} B")
+        if sys.stderr.isatty():
+            sys.stderr.write("\n")
+        if not data:
+            return True, "done"
+        final = self.wait(lambda f: f[0] == TYPE_RESP, 5.0)
+        return (final is not None and final[2][:1] == b"\x00"), (final[2][1:].decode() if final else "no final response")
+
+    def pull(self, remote: str) -> tuple[bool, bytes]:
+        ok, msg = self.command(f"pull {remote}", timeout=5.0)
+        if not ok:
+            raise SystemExit(f"gach: {msg}")
+        out = bytearray()
+        while True:
+            frame = self.wait(lambda f: f[0] == TYPE_DATA_OUT, ACK_TIMEOUT_S * ACK_RETRIES)
+            if frame is None:
+                return False, bytes(out)
+            _, fid, data = frame
+            self.send(TYPE_ACK_IN, fid)
+            if not data:
+                return True, bytes(out)
+            out += data
+
+
+def open_link(args, show_raw: bool = False) -> Link:
+    try:
+        link = Link(args.port, show_raw)
+    except OSError as err:
+        raise SystemExit(f"gach: cannot open {args.port}: {err}")
+    link.connect()
+    return link
+
+
+def run_simple(link: Link, line: str) -> int:
+    ok, msg = link.command(line)
+    if msg:
+        print(msg if ok else f"error: {msg}")
+    return 0 if ok else 1
+
+
+def do_install(link: Link, files: list[str]) -> int:
+    for name in files:
+        path = Path(name)
+        if not path.is_file():
+            print(f"error: {name} not found")
+            return 1
+        ok, msg = link.push(path, f"install/{path.name}")
+        if not ok:
+            print(f"error: push {path.name}: {msg}")
+            return 1
+    return run_simple(link, "install")
+
+
+def do_logcat(link: Link) -> int:
+    link.log_sink = lambda text: (sys.stdout.write(text), sys.stdout.flush())
+    print("-- logcat (Ctrl-C to quit) --", file=sys.stderr)
+    try:
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        return 0
+
+
+def do_shell(link: Link) -> int:
+    print("gach shell – device commands (help) + local: install <file.gapp>, push <local> <remote>, "
+          "pull <remote> [local], logcat, exit", file=sys.stderr)
+    while True:
+        try:
+            line = input("gach> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not line:
+            continue
+        parts = line.split()
+        if parts[0] in ("exit", "quit"):
+            return 0
+        if parts[0] == "install" and len(parts) > 1:
+            do_install(link, parts[1:])
+        elif parts[0] == "push" and len(parts) == 3:
+            ok, msg = link.push(Path(parts[1]), parts[2])
+            print(msg if ok else f"error: {msg}")
+        elif parts[0] == "pull" and len(parts) in (2, 3):
+            do_pull(link, parts[1], parts[2] if len(parts) == 3 else None)
+        elif parts[0] == "logcat":
+            do_logcat(link)
+            link.log_sink = None
+        else:
+            run_simple(link, line)
+
+
+def do_pull(link: Link, remote: str, local: str | None) -> int:
+    ok, data = link.pull(remote)
+    if local in (None, "-"):
+        sys.stdout.buffer.write(data)
+    else:
+        Path(local).write_bytes(data)
+        print(f"{remote} -> {local} ({len(data)} B)", file=sys.stderr)
+    if not ok:
+        print("error: transfer aborted", file=sys.stderr)
+    return 0 if ok else 1
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(prog="gach", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("-p", "--port", default=os.environ.get("GACH_PORT", "/dev/ttyUSB0"))
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    for name in ("info", "mem", "apps", "reboot", "logcat", "shell", "devices", "home", "back"):
+        sub.add_parser(name)
+    sub.add_parser("launch").add_argument("app")
+    sub.add_parser("perf").add_argument("reset", nargs="?", choices=["reset", "bench"])
+    sub.add_parser("ls").add_argument("dir", nargs="?", default="")
+    sub.add_parser("rm").add_argument("path")
+    sub.add_parser("mkdir").add_argument("path")
+    sub.add_parser("uninstall").add_argument("id")
+    sub.add_parser("install").add_argument("files", nargs="+")
+    push = sub.add_parser("push")
+    push.add_argument("local")
+    push.add_argument("remote")
+    pull = sub.add_parser("pull")
+    pull.add_argument("remote")
+    pull.add_argument("local", nargs="?")
+    args = parser.parse_args()
+
+    link = open_link(args)
+    try:
+        if args.cmd == "devices":
+            print(f"{args.port}\t{link.connect()}")
+            return 0
+        if args.cmd in ("info", "mem", "apps", "reboot", "home", "back"):
+            return run_simple(link, args.cmd)
+        if args.cmd == "launch":
+            return run_simple(link, f"launch {args.app}")
+        if args.cmd == "perf":
+            return run_simple(link, f"perf {args.reset or ''}".strip())
+        if args.cmd == "ls":
+            return run_simple(link, f"ls {args.dir}".strip())
+        if args.cmd in ("rm", "mkdir"):
+            return run_simple(link, f"{args.cmd} {args.path}")
+        if args.cmd == "uninstall":
+            return run_simple(link, f"uninstall {args.id}")
+        if args.cmd == "install":
+            return do_install(link, args.files)
+        if args.cmd == "push":
+            ok, msg = link.push(Path(args.local), args.remote)
+            print(msg if ok else f"error: {msg}")
+            return 0 if ok else 1
+        if args.cmd == "pull":
+            return do_pull(link, args.remote, args.local)
+        if args.cmd == "logcat":
+            return do_logcat(link)
+        if args.cmd == "shell":
+            return do_shell(link)
+    finally:
+        link.close()
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
