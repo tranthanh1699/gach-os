@@ -24,6 +24,7 @@ public:
     void on_create(lv_obj_t* p_root) override;
     void on_resume() override;
     void on_pause() override;
+    void on_destroy() override;
     bool on_back() override;
 
     static constexpr size_t MAX_ENTRIES = 512U; /**< Mục tối đa một thư mục (dư: báo bị cắt). */
@@ -44,6 +45,7 @@ private:
     using Path = char[fw::FILE_PATH_BUF_LEN];
 
     // ---- Dựng giao diện ----
+    void reset_ui();
     void build_sidebar(lv_obj_t* p_parent);
     void build_main(lv_obj_t* p_parent);
     void build_toolbar(lv_obj_t* p_parent);

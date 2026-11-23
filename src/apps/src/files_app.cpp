@@ -336,6 +336,7 @@ FilesApp::FilesApp()
 
 void FilesApp::on_create(lv_obj_t* p_root)
 {
+    reset_ui(); // Object app sống suốt đời máy, giao diện thì không: bỏ mọi con trỏ của lần mở trước.
     m_p_root = p_root;
     lv_obj_set_style_bg_color(p_root, lv_color_hex(COLOR_MAIN_BG), 0);
     lv_obj_set_style_bg_opa(p_root, LV_OPA_COVER, 0);
@@ -360,6 +361,57 @@ void FilesApp::on_pause()
     close_menu();
     close_dialog();
     close_prompt();
+}
+
+void FilesApp::on_destroy()
+{
+    close_dialog(); // Hộp thoại nằm trên top layer: không bị xóa cùng root.
+    reset_ui();
+}
+
+void FilesApp::reset_ui()
+{
+    if (m_p_job_timer != nullptr) {
+        lv_timer_delete(m_p_job_timer);
+        m_p_job_timer = nullptr;
+    }
+    if (m_queue_kind != QueueKind::NONE) {
+        context().services.files().cancel_job();
+        m_queue_kind = QueueKind::NONE;
+    }
+    // Widget thuộc root của lần mở trước (đã / sắp bị xóa): chỉ quên con trỏ, không chạm vào.
+    m_p_root = nullptr;
+    for (lv_obj_t*& p_item : m_p_side_items) {
+        p_item = nullptr;
+    }
+    for (lv_obj_t*& p_cell : m_p_header_cells) {
+        p_cell = nullptr;
+    }
+    for (lv_obj_t*& p_item : m_p_items) {
+        p_item = nullptr;
+    }
+    m_p_storage_bar = nullptr;
+    m_p_storage_label = nullptr;
+    m_p_back_btn = nullptr;
+    m_p_fwd_btn = nullptr;
+    m_p_crumbs = nullptr;
+    m_p_paste_btn = nullptr;
+    m_p_view_btn = nullptr;
+    m_p_header = nullptr;
+    m_p_list = nullptr;
+    m_p_footer_label = nullptr;
+    m_p_actions = nullptr;
+    m_p_pager = nullptr;
+    m_p_page_label = nullptr;
+    m_p_menu = nullptr;
+    m_p_prompt = nullptr;
+    m_p_prompt_field = nullptr;
+    m_p_viewer = nullptr;
+    m_p_dialog = nullptr;
+    m_p_long_pressed = nullptr;
+    m_prompt_kind = PromptKind::NONE;
+    std::memset(m_selected, 0, sizeof(m_selected));
+    m_selected_count = 0U;
 }
 
 bool FilesApp::on_back()
