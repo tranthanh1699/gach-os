@@ -65,12 +65,15 @@ common::Status init_ui(const hal::Devices& devices)
     }
     s_services.bind(devices);
 
-    status = s_port.init(*devices.p_display, p_touch);
+    status = s_port.init(*devices.p_display, p_touch, devices.draw_buffers);
     if (!common::is_ok(status)) {
         return status;
     }
 
     lv_display_t* const p_disp = s_port.display();
+    // Tỷ lệ UI theo màn hình; DPI ảo để widget mặc định của LVGL (lề, bo góc...) co giãn cùng tỷ lệ.
+    theme::init(static_cast<int32_t>(devices.p_display->width()), static_cast<int32_t>(devices.p_display->height()));
+    lv_display_set_dpi(p_disp, theme::px(LV_DPI_DEF));
     lv_theme_t* const p_theme = lv_theme_default_init(p_disp, lv_color_hex(theme::COLOR_PRIMARY),
                                                       lv_color_hex(theme::COLOR_SECONDARY), true, theme::font_small());
     lv_display_set_theme(p_disp, p_theme);
@@ -102,6 +105,8 @@ uint32_t clamp_period(uint32_t wait_ms)
     return wait_ms;
 }
 
+volatile uint32_t s_diag_loops = 0U;
+
 void ui_task(void* p_arg)
 {
     auto* const p_ctx = static_cast<StartContext*>(p_arg);
@@ -120,13 +125,23 @@ void ui_task(void* p_arg)
         uint32_t wait_ms = 0U;
         {
             osal::LockGuard guard(ui_mutex());
+            diag_set_phase(DIAG_PHASE_HANDLER);
             wait_ms = lv_timer_handler();
+            diag_set_phase(DIAG_PHASE_IDLE);
         }
+        s_diag_loops = s_diag_loops + 1U;
         osal::delay_ms(clamp_period(wait_ms));
     }
 }
 
 } // namespace
+
+void ui_diag(UiDiag& out)
+{
+    out.loop_count = s_diag_loops;
+    out.phase = s_diag_phase;
+    out.phase_since_ms = s_diag_phase_ms;
+}
 
 AppManager& app_manager()
 {

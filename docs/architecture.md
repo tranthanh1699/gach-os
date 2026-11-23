@@ -116,7 +116,7 @@ Shell / app ◄── fw::TimeService::now(): UTC + múi giờ (mặc định UT
 ```
 Thẻ SD: install/*.gapp ──(boot hoặc app "Apps")──► kiểm tra manifest ─► giải nén ─► apps/<id>/
                                                                                       │ đăng ký slot ScriptApp
-Launcher ──launch──► ScriptApp (fw::App, exclusive) ──► ScriptHost: lua_newstate trên arena 64 KiB
+Launcher ──launch──► ScriptApp (fw::App, exclusive) ──► ScriptHost: lua_newstate trên arena do board cấp (1 MiB PSRAM)
                                                           ├─ gach.ui / timer / sys / storage / app
                                                           ├─ handle số nguyên ↔ lv_obj_t* (không lộ con trỏ)
                                                           ├─ ngân sách 500 ms/lần gọi (hook đếm lệnh)
@@ -149,5 +149,10 @@ Launcher ──launch──► ScriptApp (fw::App, exclusive) ──► ScriptHo
 | Board mới cùng họ ESP32 (VD: ESP32-S3 + ST7789) | `platform/esp32/boards/<board>/` (board.env, sdkconfig.defaults, `board/`), driver mới trong `src/drivers` nếu IC mới | framework, apps |
 | Họ chip mới (VD: STM32, RP2040) | `platform/<chip>/`: MCAL impl, `build.sh`, entry point, board; osal port nếu không phải FreeRTOS | `src/` (trừ thêm port osal) |
 | Màn hình kích thước khác | `Ili9341Config`/driver mới + `board_config.hpp` | Shell/Launcher tự co giãn theo `IDisplay::width/height` |
+
+Board có thể thêm `boards/<board>/board.cmake` (được include trước `project()`) để nạp component riêng
+(VD driver vendor trong `boards/<board>/vendor/`) và đặt `OS_DEPENDENCIES_LOCK` khi khác target với board khác.
+Thiết bị gắn chặt SDK của chip (VD panel MIPI-DSI + PPA trên ESP32-P4) được hiện thực ngay trong `boards/<board>/board/src/`
+thay vì `src/drivers` – xem `boards/jc8012p4a1c`.
 
 Hợp đồng tối thiểu cho platform mới: hiện thực `mcal::*` cần dùng, `hal::ISystem`, `hal::board_init()`, OSAL port, và script `platform/<chip>/build.sh <board> <action>`.

@@ -23,6 +23,9 @@ constexpr int8_t CORE_ANY = -1;
 /** @return Số mili-giây kể từ khi scheduler chạy (wrap-around sau ~49 ngày). */
 uint32_t tick_ms();
 
+/** @return Số micro-giây kể từ khi khởi động (đo hiệu năng; wrap-around sau ~71 phút). */
+uint32_t time_us();
+
 /**
  * @brief Nhường CPU cho task khác trong khoảng thời gian chỉ định.
  * @param[in] ms Thời gian chờ (ms). 0 = chỉ yield.

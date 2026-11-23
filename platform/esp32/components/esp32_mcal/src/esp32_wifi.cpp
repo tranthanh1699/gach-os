@@ -151,6 +151,19 @@ bool Esp32Wifi::ip_address(char* p_buf, size_t buf_len) const
     return true;
 }
 
+bool Esp32Wifi::link_rssi(int8_t& rssi) const
+{
+    if (state() != hal::WifiState::CONNECTED) {
+        return false;
+    }
+    wifi_ap_record_t ap{};
+    if (esp_wifi_sta_get_ap_info(&ap) != ESP_OK) {
+        return false;
+    }
+    rssi = ap.rssi;
+    return true;
+}
+
 void Esp32Wifi::event_handler(void* p_arg, esp_event_base_t base, int32_t event_id, void* p_data)
 {
     auto* const p_self = static_cast<Esp32Wifi*>(p_arg);

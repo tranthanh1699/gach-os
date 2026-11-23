@@ -14,6 +14,46 @@ struct Devices;
 
 namespace fw {
 
+/** @brief Số liệu hiệu năng vẽ của LVGL trong một cửa sổ đo (từ lần reset gần nhất). */
+struct PerfStats {
+    uint32_t window_ms;   /**< Độ dài cửa sổ đo. */
+    uint32_t frames;      /**< Số lần LVGL vẽ lại (refresh có vùng bẩn). */
+    uint32_t render_us;   /**< Tổng thời gian vẽ (gồm cả flush, vì flush chạy đồng bộ trong lúc vẽ). */
+    uint32_t flush_us;    /**< Tổng thời gian đẩy pixel lên màn hình (IDisplay::draw_bitmap). */
+    uint32_t flush_count; /**< Số lần flush (số dải vẽ). */
+    uint32_t flushed_px;  /**< Tổng số pixel đã đẩy. */
+    uint32_t max_frame_us; /**< Khung chậm nhất. */
+};
+
+/**
+ * @brief Đọc số liệu hiệu năng. Gọi khi giữ UiLock (hoặc từ task UI).
+ * @param[out] out   Số liệu.
+ * @param[in]  reset true -> bắt đầu cửa sổ đo mới.
+ */
+void perf_snapshot(PerfStats& out, bool reset);
+
+/**
+ * @brief Đặt lịch benchmark: task UI vẽ lại toàn màn `rounds` lần (vẽ luôn chạy trên stack của task UI).
+ *        Gọi khi giữ UiLock; đọc kết quả bằng perf_bench_result() sau khi nhả khóa.
+ */
+void perf_bench_start(uint32_t rounds);
+
+/**
+ * @brief Kết quả benchmark (gọi khi giữ UiLock).
+ * @return true nếu đã xong (out hợp lệ), false nếu còn đang chạy / chưa đặt lịch.
+ */
+bool perf_bench_result(PerfStats& out);
+
+/** @brief Chẩn đoán task UI, đọc KHÔNG cần UiLock (dùng được khi UI đang treo). */
+struct UiDiag {
+    uint32_t loop_count;     /**< Số vòng lặp UI đã chạy. */
+    uint32_t phase;          /**< 0 ngủ, 1 lv_timer_handler, 2 vẽ, 3 flush, 4 đọc touch. */
+    uint32_t phase_since_ms; /**< Thời điểm vào phase hiện tại. */
+};
+
+/** @param[out] out Trạng thái task UI hiện tại. */
+void ui_diag(UiDiag& out);
+
 /** @return App manager toàn cục – dùng để đăng ký app trước khi start(). */
 AppManager& app_manager();
 

@@ -22,7 +22,7 @@ class AppManager;
 
 namespace runtime {
 
-constexpr size_t MAX_PACKAGES = 32U;       /**< Số app cài thêm tối đa (mỗi slot ~0.2 KiB RAM tĩnh). */
+constexpr size_t MAX_PACKAGES = 128U;      /**< Số app cài thêm tối đa (mỗi slot ~0.2 KiB RAM tĩnh + 64 B bộ đệm quét). */
 constexpr size_t PACKAGE_ID_BUF_LEN = 32U; /**< Id gói tối đa 31 ký tự + ký tự kết thúc. */
 
 /** @brief Thông tin hiển thị của một gói đã cài. */
@@ -60,6 +60,18 @@ common::Status uninstall(const char* p_id);
 
 /** @return Mô tả lỗi gần nhất (chuỗi rỗng nếu không có). */
 const char* last_error();
+
+/**
+ * @brief Khởi động debug bridge (tool `gach` trên máy tính: cài app, shell, đẩy/kéo file, logcat).
+ * @return ERR_NOT_SUPPORTED nếu board không có cổng debug.
+ */
+common::Status bridge_start(const hal::Devices& devices);
+
+/**
+ * @brief Gửi một đoạn log qua bridge (gọi từ hook log của platform, mọi task).
+ * @return false nếu không có máy tính đang kết nối -> người gọi tự in log dạng chữ thô.
+ */
+bool bridge_log(const char* p_text, size_t len);
 
 } // namespace runtime
 

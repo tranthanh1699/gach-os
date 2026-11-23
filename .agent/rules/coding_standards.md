@@ -7,7 +7,7 @@
 
 | Đối tượng | Quy ước | Ví dụ |
 | :--- | :--- | :--- |
-| File | `snake_case` – `.hpp` / `.cpp` | `app_manager.hpp`, `ili9341.cpp` |
+| File | `snake_case` – `.hpp` / `.cpp` | `app_manager.hpp`, `pwm_backlight.cpp` |
 | Namespace | `snake_case`, trùng tên tầng | `fw`, `hal`, `mcal`, `osal`, `drivers`, `apps`, `common` |
 | Class / Struct | `PascalCase` | `AppManager`, `Xpt2046Config` |
 | Interface (thuần ảo) | `I` + `PascalCase` | `IDisplay`, `ISpiDevice` |

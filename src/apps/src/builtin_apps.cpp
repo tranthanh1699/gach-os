@@ -11,7 +11,6 @@
 #include "launcher_app.hpp"
 #include "settings_app.hpp"
 #include "stopwatch_app.hpp"
-#include "sysinfo_app.hpp"
 #include "touch_test_app.hpp"
 #include "wifi_app.hpp"
 
@@ -22,13 +21,12 @@ namespace {
 LauncherApp s_launcher;
 StopwatchApp s_stopwatch;
 TouchTestApp s_touch_test;
-SysInfoApp s_sysinfo;
 SettingsApp s_settings;
 WifiApp s_wifi;
 AppStoreApp s_app_store;
 
 // Thứ tự mảng = thứ tự icon trên launcher.
-fw::App* const s_apps[] = {&s_launcher, &s_wifi, &s_app_store, &s_stopwatch, &s_touch_test, &s_sysinfo, &s_settings};
+fw::App* const s_apps[] = {&s_launcher, &s_wifi, &s_app_store, &s_stopwatch, &s_touch_test, &s_settings};
 
 } // namespace
 

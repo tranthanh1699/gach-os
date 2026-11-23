@@ -1,4 +1,4 @@
 ## Thư viện bên thứ ba qua ESP-IDF Component Manager (khóa phiên bản để build tái lập).
 dependencies:
   idf: ">=5.3"
-  lvgl/lvgl: "9.2.2"
+  lvgl/lvgl: "9.6.0"

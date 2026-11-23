@@ -5,28 +5,48 @@
 #include "lvgl_port.hpp"
 
 #include "framework/config.hpp"
+#include "framework/system.hpp"
 #include "osal/osal.hpp"
 
 namespace fw {
 
 namespace {
 
-// Buffer render tĩnh trong RAM nội (DMA-capable trên ESP32), căn lề theo yêu cầu DMA/LVGL.
-alignas(4) uint8_t s_draw_buf[config::DRAW_BUF_BYTES];
+// Số liệu hiệu năng (chỉ task UI ghi; đọc qua perf_snapshot() khi giữ UiLock).
+PerfStats s_perf{};
+uint32_t s_perf_window_start_ms = 0U;
+uint32_t s_render_start_us = 0U;
 
 } // namespace
 
+volatile uint32_t s_diag_phase = DIAG_PHASE_IDLE;
+volatile uint32_t s_diag_phase_ms = 0U;
+
+void diag_set_phase(uint32_t phase)
+{
+    s_diag_phase = phase;
+    s_diag_phase_ms = osal::tick_ms();
+}
+
 LvglPort::LvglPort()
     : m_p_display(nullptr), m_p_touch(nullptr), m_p_lv_display(nullptr), m_p_lv_indev(nullptr), m_swap_bytes(false),
+      m_is_async(false),
       m_last_point{0, 0}
 {
 }
 
-common::Status LvglPort::init(hal::IDisplay& display, hal::ITouch* p_touch)
+common::Status LvglPort::init(hal::IDisplay& display, hal::ITouch* p_touch, const hal::MemoryRegion* p_buffers)
 {
     if (m_p_lv_display != nullptr) {
         return common::Status::ERR_STATE;
     }
+    if ((p_buffers == nullptr) || (p_buffers[0].p_base == nullptr) || (p_buffers[0].size == 0U)) {
+        return common::Status::ERR_PARAM; // Board phải cấp buffer vẽ (hal::Devices::draw_buffers).
+    }
+    const hal::MemoryRegion& second = p_buffers[1];
+    // Buffer thứ hai chỉ có ích khi màn hình đẩy pixel bất đồng bộ (vẽ buffer này trong lúc đẩy buffer kia).
+    m_is_async = display.supports_async_flush();
+    const bool is_double = m_is_async && (second.p_base != nullptr) && (second.size == p_buffers[0].size);
     m_p_display = &display;
     m_p_touch = p_touch;
     m_swap_bytes = (display.pixel_format() == hal::PixelFormat::RGB565_SWAPPED);
@@ -39,9 +59,13 @@ common::Status LvglPort::init(hal::IDisplay& display, hal::ITouch* p_touch)
         return common::Status::ERR_NO_MEM;
     }
     lv_display_set_color_format(m_p_lv_display, LV_COLOR_FORMAT_RGB565);
-    lv_display_set_buffers(m_p_lv_display, s_draw_buf, nullptr, sizeof(s_draw_buf), LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_buffers(m_p_lv_display, p_buffers[0].p_base, is_double ? second.p_base : nullptr,
+                           static_cast<uint32_t>(p_buffers[0].size), LV_DISPLAY_RENDER_MODE_PARTIAL);
     lv_display_set_flush_cb(m_p_lv_display, &LvglPort::flush_cb);
     lv_display_set_user_data(m_p_lv_display, this);
+    lv_display_add_event_cb(m_p_lv_display, &LvglPort::render_event_cb, LV_EVENT_RENDER_START, nullptr);
+    lv_display_add_event_cb(m_p_lv_display, &LvglPort::render_event_cb, LV_EVENT_RENDER_READY, nullptr);
+    s_perf_window_start_ms = osal::tick_ms();
 
     if (m_p_touch != nullptr) {
         m_p_lv_indev = lv_indev_create();
@@ -63,15 +87,38 @@ void LvglPort::flush_cb(lv_display_t* p_disp, const lv_area_t* p_area, uint8_t* 
         lv_draw_sw_rgb565_swap(p_px_map, lv_area_get_size(p_area));
     }
     const hal::Area area{p_area->x1, p_area->y1, p_area->x2, p_area->y2};
+    diag_set_phase(DIAG_PHASE_FLUSH);
+    const uint32_t start_us = osal::time_us();
+    if (p_self->m_is_async) {
+        // Trả về ngay: LVGL vẽ dải kế tiếp vào buffer kia; on_flush_done (ISR) báo flush_ready.
+        const common::Status status = p_self->m_p_display->draw_bitmap_async(
+            area, reinterpret_cast<const uint16_t*>(p_px_map), &LvglPort::on_flush_done, p_disp);
+        s_perf.flush_us += osal::time_us() - start_us;
+        ++s_perf.flush_count;
+        s_perf.flushed_px += static_cast<uint32_t>(lv_area_get_size(p_area));
+        if (!common::is_ok(status)) {
+            lv_display_flush_ready(p_disp); // Lỗi khởi động: không để LVGL chờ mãi.
+        }
+        return;
+    }
     // Lỗi truyền 1 khung không được làm treo UI: vẫn báo flush_ready để LVGL tiếp tục.
     (void)p_self->m_p_display->draw_bitmap(area, reinterpret_cast<const uint16_t*>(p_px_map));
+    s_perf.flush_us += osal::time_us() - start_us;
+    ++s_perf.flush_count;
+    s_perf.flushed_px += static_cast<uint32_t>(lv_area_get_size(p_area));
     lv_display_flush_ready(p_disp);
+}
+
+void LvglPort::on_flush_done(void* p_ctx)
+{
+    lv_display_flush_ready(static_cast<lv_display_t*>(p_ctx)); // Chỉ đặt cờ: an toàn khi gọi từ ISR.
 }
 
 void LvglPort::touch_read_cb(lv_indev_t* p_indev, lv_indev_data_t* p_data)
 {
     auto* const p_self = static_cast<LvglPort*>(lv_indev_get_user_data(p_indev));
     hal::TouchPoint point{};
+    diag_set_phase(DIAG_PHASE_TOUCH);
     const bool is_pressed = common::is_ok(p_self->m_p_touch->read(point)) && point.pressed;
     if (is_pressed) {
         p_self->m_last_point.x = static_cast<int32_t>(point.x);
@@ -79,6 +126,69 @@ void LvglPort::touch_read_cb(lv_indev_t* p_indev, lv_indev_data_t* p_data)
     }
     p_data->point = p_self->m_last_point;
     p_data->state = is_pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
+}
+
+void LvglPort::render_event_cb(lv_event_t* p_event)
+{
+    if (lv_event_get_code(p_event) == LV_EVENT_RENDER_START) {
+        diag_set_phase(DIAG_PHASE_RENDER);
+        s_render_start_us = osal::time_us();
+        return;
+    }
+    const uint32_t frame_us = osal::time_us() - s_render_start_us;
+    s_perf.render_us += frame_us;
+    s_perf.max_frame_us = (frame_us > s_perf.max_frame_us) ? frame_us : s_perf.max_frame_us;
+    ++s_perf.frames;
+}
+
+void perf_snapshot(PerfStats& out, bool reset)
+{
+    out = s_perf;
+    out.window_ms = osal::tick_ms() - s_perf_window_start_ms;
+    if (reset) {
+        s_perf = PerfStats{};
+        s_perf_window_start_ms = osal::tick_ms();
+    }
+}
+
+uint32_t s_bench_rounds = 0U;
+bool s_bench_done = false;
+PerfStats s_bench_result{};
+
+/** @brief Chạy trong task UI (lv_timer): vẽ lại toàn màn N lần, lưu số liệu riêng của các lần đó. */
+void bench_timer_cb(lv_timer_t* p_timer)
+{
+    (void)p_timer;
+    const PerfStats saved = s_perf;
+    const uint32_t saved_start = s_perf_window_start_ms;
+    s_perf = PerfStats{};
+    s_perf_window_start_ms = osal::tick_ms();
+    lv_display_t* const p_disp = lv_display_get_default();
+    for (uint32_t round = 0U; (p_disp != nullptr) && (round < s_bench_rounds); ++round) {
+        lv_obj_invalidate(lv_screen_active());
+        lv_refr_now(p_disp);
+    }
+    perf_snapshot(s_bench_result, false);
+    s_perf = saved; // Không làm lệch cửa sổ đo đang chạy của `perf`.
+    s_perf_window_start_ms = saved_start;
+    s_bench_done = true;
+}
+
+void perf_bench_start(uint32_t rounds)
+{
+    s_bench_rounds = rounds;
+    s_bench_done = false;
+    lv_timer_t* const p_timer = lv_timer_create(&bench_timer_cb, 0U, nullptr);
+    lv_timer_set_repeat_count(p_timer, 1); // Một lần rồi tự xóa.
+}
+
+bool perf_bench_result(PerfStats& out)
+{
+    if (!s_bench_done) {
+        return false;
+    }
+    out = s_bench_result;
+    return true;
 }
 
 uint32_t LvglPort::tick_cb()

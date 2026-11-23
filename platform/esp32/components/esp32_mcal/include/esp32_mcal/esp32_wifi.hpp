@@ -38,6 +38,7 @@ public:
     common::Status disconnect() override;
     hal::WifiState state() const override { return static_cast<hal::WifiState>(m_state.load()); }
     bool ip_address(char* p_buf, size_t buf_len) const override;
+    bool link_rssi(int8_t& rssi) const override;
 
 private:
     static void event_handler(void* p_arg, esp_event_base_t base, int32_t event_id, void* p_data);

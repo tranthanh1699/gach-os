@@ -75,6 +75,18 @@ public:
 
     /** @brief Xóa file hoặc thư mục RỖNG. */
     virtual common::Status remove(const char* p_path) = 0;
+
+    /**
+     * @brief Dung lượng phân vùng (byte).
+     * @note  Lần gọi đầu có thể chậm (FAT phải đếm cụm trống), các lần sau dùng giá trị cache của FS.
+     * @return ERR_NOT_SUPPORTED nếu không hỗ trợ, lỗi khác nếu chưa mount.
+     */
+    virtual common::Status get_capacity(uint64_t& total_bytes, uint64_t& free_bytes)
+    {
+        (void)total_bytes;
+        (void)free_bytes;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
 };
 
 } // namespace hal

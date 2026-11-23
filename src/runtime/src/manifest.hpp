@@ -33,7 +33,7 @@ constexpr size_t APP_ICON_BUF_LEN = 16U;
 enum Permission : uint8_t {
     PERMISSION_NONE = 0U,
     PERMISSION_STORAGE = 1U << 0U, /**< gach.storage */
-    PERMISSION_NETWORK = 1U << 1U  /**< Dự phòng cho SDK mạng. */
+    PERMISSION_NETWORK = 1U << 1U  /**< gach.net (SDK v5). */
 };
 
 /** @brief Nội dung manifest đã kiểm tra. */

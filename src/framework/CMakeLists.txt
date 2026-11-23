@@ -1,10 +1,12 @@
 # L4 Framework (OS core): AppManager, Shell, Services, LVGL port.
 # Phụ thuộc: HAL contract + OSAL + LVGL. KHÔNG phụ thuộc drivers/mcal/SDK chip.
 idf_component_register(SRCS "src/app_manager.cpp"
+                            "src/list_view.cpp"
                             "src/lvgl_port.cpp"
                             "src/services.cpp"
                             "src/shell.cpp"
                             "src/system.cpp"
+                            "src/theme.cpp"
                             "src/time_service.cpp"
                             "src/wifi_service.cpp"
                        INCLUDE_DIRS "include"

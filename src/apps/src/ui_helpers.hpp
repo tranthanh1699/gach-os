@@ -37,8 +37,8 @@ inline lv_obj_t* button(lv_obj_t* p_parent, const char* p_text, lv_event_cb_t cb
 /** @brief Biến container gốc của app thành cột flex có padding chuẩn. */
 inline void column_layout(lv_obj_t* p_root)
 {
-    lv_obj_set_style_pad_all(p_root, fw::theme::PAD_NORMAL, 0);
-    lv_obj_set_style_pad_row(p_root, fw::theme::PAD_NORMAL, 0);
+    lv_obj_set_style_pad_all(p_root, fw::theme::pad(), 0);
+    lv_obj_set_style_pad_row(p_root, fw::theme::pad(), 0);
     lv_obj_set_flex_flow(p_root, LV_FLEX_FLOW_COLUMN);
 }
 

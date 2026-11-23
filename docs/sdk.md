@@ -1,4 +1,4 @@
-# gach SDK (v2): viết app cài thêm cho gach-os
+# gach SDK (v5): viết app cài thêm cho gach-os
 
 App cài thêm là một **gói `.gapp`** chứa mã Lua 5.4, tương tự file `.jar` trên Nokia S60 hay `.apk` trên Android. Gói chạy trong máy ảo có sandbox, nên cùng một gói chạy được trên mọi board gach-os, bất kể chip hay kích thước màn hình.
 
@@ -21,7 +21,7 @@ sdk=1                     # bắt buộc. Phiên bản SDK tối thiểu app c�
 entry=main.lua            # tùy chọn (mặc định main.lua).
 icon=bell                 # tùy chọn. Xem bảng icon bên dưới.
 color=#E3B341             # tùy chọn. Màu nền icon.
-permissions=storage       # tùy chọn. Danh sách cách nhau bằng dấu phẩy.
+permissions=storage       # tùy chọn: storage, network (SDK v5). Cách nhau bằng dấu phẩy.
 ```
 
 Icon hỗ trợ: `audio video list settings home image play bell gps file edit envelope call keyboard charge folder tint eye wifi shuffle loop`.
@@ -83,6 +83,44 @@ Font hệ thống chỉ có ASCII cùng các ký hiệu trong `SYMBOL`; ký tự
 
 `column`/`row` chỉ dùng để bố cục, không nhận chạm (chạm rơi xuống widget chứa nó).
 
+#### Co giãn theo màn hình (SDK v3, manifest `sdk=3`)
+
+Gói app chạy được trên mọi kích thước màn hình. App khai báo `sdk=3` viết kích thước theo **dp**
+(đơn vị thiết kế, bằng 1 pixel trên màn 320x240) và được hệ thống đổi sang pixel thật theo tỷ lệ màn hình (máy tính bảng 1280x800: 1.5x):
+
+- Mọi số pixel truyền vào `set_size`, `set_pad`, `set_gap`, `set_radius` được hiểu là dp.
+- `set_font("small"|"medium"|"large")` cho cỡ chữ co giãn tương ứng (14/20/28 dp).
+- Root của app có lề chuẩn đã co giãn.
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `screen_size() -> w, h` | Kích thước vùng nội dung của app (dp với `sdk=3`, pixel với `sdk<=2`): dùng để chọn bố cục (VD: thêm cột trên màn rộng) |
+| `on_swipe(h, fn)` | Gọi `fn(dir)` với `dir` = `"up"`/`"down"`/`"left"`/`"right"` mỗi lần vuốt trên widget `h`. Widget được bật nhận chạm và tắt cuộn. Vuốt bắt đầu trên widget con không có callback (`box`, `label`, `row`, `column`) cũng được tính, nên thường gắn vào `root`. Mỗi widget chỉ có một callback: không dùng cho widget đã có `on_click`/`on_change` |
+
+App `sdk<=2` **không đổi hành vi**: số pixel giữ nguyên nghĩa pixel thật, font đúng 14/20/28 px, nên trên màn lớn
+sẽ hiển thị nhỏ nhưng bố cục không vỡ. Muốn co giãn, nâng manifest lên `sdk=3` (yêu cầu gach-os có SDK v3).
+
+#### Widget số liệu (SDK v4, manifest `sdk=4`)
+
+Widget chỉ để hiển thị (không nhận chạm), kiểu phẳng tối: rãnh `0x2C2C2E`, màu chỉ thị mặc định `0x0A84FF`.
+Kích thước tính theo dp như SDK v3.
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `bar(parent, min, max, value?) -> h` | Thanh ngang bo tròn, rộng 100%, cao 8 dp |
+| `arc(parent, min, max, width?) -> h` | Cung tròn 270° (hở phía dưới), 120x120 dp, nét `width` dp (mặc định 10). Đặt `label` làm con rồi `center()` để hiện số ở giữa |
+| `chart(parent, points, min, max) -> h` | Biểu đồ đường cuộn: `points` điểm (2..120), trục Y `min..max`, rộng 100% cao 120 dp, 3 đường lưới ngang |
+| `chart_series(chart, 0xRRGGBB?) -> n` | Thêm một đường (tối đa 4), trả số thứ tự `n` (1, 2...) |
+| `chart_push(chart, n, value)` | Thêm điểm mới vào bên phải đường `n`, các điểm cũ dịch sang trái. Chưa đủ điểm thì phần bên trái để trống |
+| `set_value(h, value)` | Đổi giá trị `bar` / `arc` / `slider` |
+| `set_accent(h, 0xRRGGBB)` | Màu phần chỉ thị của `bar` / `arc` / `slider` (VD: đổi sang đỏ khi vượt ngưỡng) |
+
+#### Vị trí tuyệt đối (SDK v5, manifest `sdk=5`)
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `set_pos(h, x, y)` | Đặt góc trên trái (dp) **trong một `box`** (box không tự bố cục). Trong `row`/`column` vị trí do bố cục quyết định, lệnh không có tác dụng. Dùng để ghép hình: VD icon đám mây = 3 `box` bo tròn chồng lên nhau (xem app Weather) |
+
 ### gach.timer
 
 | Hàm | Mô tả |
@@ -97,7 +135,51 @@ Timer tự **tạm dừng khi app ở nền** và bị hủy khi app đóng.
 | Hàm | Mô tả |
 | :--- | :--- |
 | `uptime_ms() -> int` | Thời gian từ khi máy khởi động |
+| `stats() -> table` | Chỉ số vận hành (SDK v4), xem bảng dưới. Gọi khoảng 1 lần/giây |
 | `time() -> table\|nil` | `{year, month, day, hour, min, sec, wday, utc_offset}`: giờ địa phương theo múi giờ chọn trong Settings. Trả `nil` nếu chưa đồng bộ NTP (chưa có Wi-Fi). `wday`: 0 = Chủ nhật. `utc_offset`: số phút lệch so với UTC |
+
+`stats()` trả về bảng sau. Trường nào board không hỗ trợ thì **là `nil`**, nên luôn kiểm tra trước khi dùng.
+Kích thước tính bằng byte; số vượt 2^31 (VD: dung lượng thẻ SD) là số thực.
+
+| Trường | Nội dung |
+| :--- | :--- |
+| `chip`, `board` | Tên chip (VD `"esp32p4"`), tên board |
+| `uptime_ms` | Thời gian từ khi khởi động |
+| `cpu` | `{cores, mhz, tasks?, load?}`. `load[i]` = % tải core `i` (1 = core 0) tính trên khoảng giữa hai lần gọi `stats()` (lần đầu: trung bình từ lúc khởi động). `tasks` = số task RTOS |
+| `ram` | Heap RAM nội: `{total, free, min, largest}`. `min` = thấp nhất từng ghi nhận, `largest` = khối liền lớn nhất còn cấp được |
+| `psram` | `{total, free, min}`; `nil` nếu board không có PSRAM |
+| `lvgl` | Heap giao diện: `{total, free, used_pct, frag_pct}` |
+| `flash` | `{total, app_size, app_used}`: chip flash, phân vùng firmware, kích thước firmware |
+| `sd` | Thẻ nhớ `{total, free}`; `nil` nếu không có thẻ. Lần gọi đầu có thể chậm (FAT đếm cụm trống), không tính vào giới hạn 500 ms |
+| `temp` | Nhiệt độ chip (°C, số thực) |
+| `fps` | Số lần màn hình vẽ lại mỗi giây kể từ lần gọi trước (màn hình đứng yên thì gần 0) |
+| `wifi` | `{connected, ssid, ip?, rssi?}` (`rssi` dBm); `nil` nếu board không có Wi-Fi |
+
+### gach.net (SDK v5, cần `permissions=network`)
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `get(url, fn) -> true \| nil, lý do` | Gửi HTTP(S) GET **không chặn**. Khi xong, `fn(code, body, truncated)` chạy trên UI: `code` = mã HTTP (VD 200), `body` = nội dung (chuỗi); lỗi mạng/TLS/timeout thì `code = 0` và `body` = lý do. Lý do không gửi được: `"offline"` (chưa có Wi-Fi), `"busy"` (đang có yêu cầu khác), `"not supported"` (board không có mạng) |
+
+- Mỗi lúc **một** yêu cầu: gửi yêu cầu tiếp theo trong callback của yêu cầu trước.
+- HTTPS kiểm tra chứng chỉ máy chủ bằng bộ CA dựng sẵn; timeout 15 s; tự theo tối đa 3 lần chuyển hướng.
+- Phản hồi tối đa 64 KiB (board JC8012P4A1C); dài hơn thì `truncated = true` và `body` chỉ là phần đầu.
+- URL tối đa 511 ký tự. Đóng app khi yêu cầu đang chạy: callback bị bỏ, không lỗi.
+
+### gach.json (SDK v5)
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `decode(text) -> value \| nil, lỗi` | JSON -> Lua: object -> table khóa chuỗi, array -> table 1..n, `null` -> `nil`, số nguyên vừa 32 bit -> integer, còn lại -> số thực. Độ sâu tối đa 32. Lỗi cú pháp trả `nil, "<lỗi> at offset <n>"` |
+
+```lua
+gach.net.get("https://api.open-meteo.com/v1/forecast?latitude=21.03&longitude=105.85&current=temperature_2m",
+  function(code, body)
+    if code ~= 200 then print("lỗi", code, body) return end
+    local data = gach.json.decode(body)
+    print(data.current.temperature_2m)
+  end)
+```
 
 ### gach.storage (cần `permissions=storage`)
 
@@ -118,15 +200,15 @@ Dữ liệu lưu trong `apps/<id>/data.ini` trên thẻ SD và **được giữ 
 
 Thư viện Lua có sẵn: `string`, `table`, `math`, `utf8`, `coroutine` và các hàm cơ bản. Sandbox **không có** `io`, `os`, `require`, `load`, `dofile`.
 
-## 3. Giới hạn (board ESP32-2432S028R, không PSRAM)
+## 3. Giới hạn (board JC8012P4A1C)
 
 | Tài nguyên | Giới hạn | Khi vượt |
 | :--- | :--- | :--- |
-| RAM máy ảo | 64 KiB/app (gồm cả runtime Lua) | Lỗi `not enough memory`, app hiện màn hình lỗi |
+| RAM máy ảo | 1 MiB/app trong PSRAM (gồm cả runtime Lua) | Lỗi `not enough memory`, app hiện màn hình lỗi |
 | Thời gian mỗi lần gọi (callback, vòng đời) | 500 ms | Lỗi `script timeout` |
 | Widget | 96 / app | Lỗi `too many UI objects` |
 | Timer | 8 / app | Lỗi `too many timers` |
-| App cài đồng thời | 32 | Báo lỗi `too many apps installed`, gói được giữ lại trong `/install` |
+| App cài đồng thời | 128 | Báo lỗi `too many apps installed`, gói được giữ lại trong `/install` |
 | App script mở cùng lúc | 1 (mở app khác sẽ đóng app trước) | |
 
 Khi app gặp lỗi, chỉ app đó hiện màn hình **App error** kèm thông báo; OS và các app khác vẫn chạy bình thường. Nhấn Back để thoát.
@@ -157,7 +239,10 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 
 - [`appstore/apps/counter`](../appstore/apps/counter): UI, sự kiện, timer, `gach.storage`.
 - [`appstore/apps/world_clock`](../appstore/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
-- [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v2): máy tính bỏ túi kiểu điện thoại, gồm bố cục lưới co giãn, nút tròn, đổi màu khi chọn toán tử, và ký hiệu `÷` vẽ bằng `box`.
+- [`appstore/apps/game2048`](../appstore/apps/game2048) (SDK v3): game 2048 với `on_swipe`, bàn cờ vuông co giãn theo màn hình, lưu ván đang chơi và điểm cao nhất.
+- [`appstore/apps/weather`](../appstore/apps/weather) (SDK v5): thời tiết qua Wi-Fi (Open-Meteo): nhiệt độ, cảm giác như, độ ẩm, gió, UV, xác suất mưa, dự báo theo giờ / 7 ngày, mặt trời mọc/lặn. Dùng `net.get`, `json.decode`, icon vẽ bằng `box` + `set_pos`.
+- [`appstore/apps/sysmon`](../appstore/apps/sysmon) (SDK v4): System Monitor. Dashboard tải CPU từng core, RAM/PSRAM/heap LVGL, firmware/thẻ SD, nhiệt độ, Wi-Fi, cập nhật mỗi giây bằng `gach.sys.stats()` cùng `arc`, `bar`, `chart`.
+- [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v3): máy tính kiểu điện thoại / máy tính bảng. Dùng `screen_size()` để chọn bố cục (màn rộng có thêm phím khoa học và lịch sử), lưu lịch sử bằng `gach.storage` dạng bộ đệm vòng, và vẽ ký hiệu `÷` bằng `box`.
 
 ## 6. Tương thích
 
@@ -165,6 +250,9 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 | :--- | :--- |
 | 1 | `gach.ui` cơ bản, `timer`, `sys`, `storage`, `app` |
 | 2 | Bố cục & kiểu dáng: `box`, `set_size`, `set_grow`, `set_bg`, `set_radius`, `set_align`, `set_pad`, `set_gap`, `center`, `SYMBOL` |
+| 3 | Co giãn theo màn hình: app `sdk=3` dùng dp và font co giãn; `screen_size`, `on_swipe` (vuốt) |
+| 4 | `sys.stats()` (CPU, bộ nhớ, lưu trữ, nhiệt độ, Wi-Fi); widget `bar`, `arc`, `chart` + `chart_series`/`chart_push`, `set_value`, `set_accent` |
+| 5 | `net.get` (HTTP/HTTPS, quyền `network`), `json.decode`, `ui.set_pos` |
 
 - Runtime từ chối gói có `sdk` lớn hơn `gach.sdk_version` của máy.
 - API đã phát hành **không bao giờ bị xóa hay đổi nghĩa**; SDK mới chỉ thêm API. App viết cho `sdk=1` chạy được trên mọi bản gach-os về sau.

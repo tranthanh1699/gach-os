@@ -29,13 +29,20 @@ private:
     void confirm_uninstall(size_t index);
     void close_dialog();
 
+    void change_page(int32_t delta);
+
     static void on_install_clicked(lv_event_t* p_event);
+    static void on_prev_clicked(lv_event_t* p_event);
+    static void on_next_clicked(lv_event_t* p_event);
     static void on_package_clicked(lv_event_t* p_event);
     static void on_uninstall_confirmed(lv_event_t* p_event);
     static void on_dialog_cancel(lv_event_t* p_event);
 
     lv_obj_t* m_p_status;
     lv_obj_t* m_p_install_btn;
+    lv_obj_t* m_p_prev_btn;
+    lv_obj_t* m_p_next_btn;
+    size_t m_page; /**< Trang danh sách đang xem: chỉ dựng widget của một trang (giữ heap LVGL nhỏ). */
     lv_obj_t* m_p_list;
     lv_obj_t* m_p_dialog;
     char m_selected_id[runtime::PACKAGE_ID_BUF_LEN];

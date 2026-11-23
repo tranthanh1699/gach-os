@@ -1,0 +1,15 @@
+## Phụ thuộc theo target. Chip không có Wi-Fi nội (ESP32-P4) dùng Wi-Fi của chip phụ (ESP32-C6)
+## qua esp_hosted; esp_wifi_remote ánh xạ API esp_wifi_* sang chip phụ -> esp32_wifi.cpp không đổi.
+##
+## ESP-IDF 6.1 cần esp_wifi_remote >= 1.6. Giữ esp_hosted ở nhánh 2.x: firmware C6 xuất xưởng của board
+## JC8012P4A1C dùng giao thức RPC của esp_hosted-MCU đời 1.x/2.x; esp_hosted 3.x đổi sang RPC-V2 và
+## sẽ không giao tiếp được nếu chưa nạp lại firmware cho C6.
+dependencies:
+  espressif/esp_wifi_remote:
+    version: "1.6.3"
+    rules:
+      - if: "target in [esp32p4]"
+  espressif/esp_hosted:
+    version: "2.13.1"
+    rules:
+      - if: "target in [esp32p4]"

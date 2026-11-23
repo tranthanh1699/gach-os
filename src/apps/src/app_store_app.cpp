@@ -7,6 +7,7 @@
 #include <cstdio>
 
 #include "common/string_utils.hpp"
+#include "framework/list_view.hpp"
 #include "framework/theme.hpp"
 #include "ui_helpers.hpp"
 
@@ -17,12 +18,22 @@ namespace {
 constexpr fw::AppInfo INFO{"apps", "Apps", LV_SYMBOL_DOWNLOAD, 0xE3B341U, true, false};
 constexpr size_t TEXT_LEN = 96U;
 constexpr int32_t INSTALL_BUTTON_SIZE = 36;
+constexpr size_t PAGE_SIZE = 20U; /**< Mỗi dòng ~0.75 KiB heap LVGL: 128 dòng cùng lúc sẽ làm cạn heap. */
+
+void set_enabled(lv_obj_t* p_obj, bool is_enabled)
+{
+    if (is_enabled) {
+        lv_obj_remove_state(p_obj, LV_STATE_DISABLED);
+    } else {
+        lv_obj_add_state(p_obj, LV_STATE_DISABLED);
+    }
+}
 
 } // namespace
 
 AppStoreApp::AppStoreApp()
-    : fw::App(INFO), m_p_status(nullptr), m_p_install_btn(nullptr), m_p_list(nullptr), m_p_dialog(nullptr),
-      m_selected_id{}
+    : fw::App(INFO), m_p_status(nullptr), m_p_install_btn(nullptr), m_p_prev_btn(nullptr), m_p_next_btn(nullptr),
+      m_page(0U), m_p_list(nullptr), m_p_dialog(nullptr), m_selected_id{}
 {
 }
 
@@ -35,17 +46,20 @@ void AppStoreApp::on_create(lv_obj_t* p_root)
     lv_obj_set_size(p_header, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(p_header, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(p_header, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(p_header, fw::theme::PAD_NORMAL, 0);
+    lv_obj_set_style_pad_column(p_header, fw::theme::pad(), 0);
 
     m_p_status = ui::label(p_header, "", fw::theme::font_small(), fw::theme::COLOR_TEXT_MUTED);
     lv_obj_set_flex_grow(m_p_status, 1);
     lv_label_set_long_mode(m_p_status, LV_LABEL_LONG_DOT);
+    const int32_t button_size = fw::theme::px(INSTALL_BUTTON_SIZE);
+    m_p_prev_btn = ui::button(p_header, LV_SYMBOL_LEFT, &AppStoreApp::on_prev_clicked, this);
+    lv_obj_set_size(m_p_prev_btn, button_size, button_size);
+    m_p_next_btn = ui::button(p_header, LV_SYMBOL_RIGHT, &AppStoreApp::on_next_clicked, this);
+    lv_obj_set_size(m_p_next_btn, button_size, button_size);
     m_p_install_btn = ui::button(p_header, LV_SYMBOL_SD_CARD, &AppStoreApp::on_install_clicked, this);
-    lv_obj_set_size(m_p_install_btn, INSTALL_BUTTON_SIZE, INSTALL_BUTTON_SIZE);
+    lv_obj_set_size(m_p_install_btn, button_size, button_size);
 
-    m_p_list = lv_list_create(p_root);
-    lv_obj_set_width(m_p_list, LV_PCT(100));
-    lv_obj_set_flex_grow(m_p_list, 1);
+    m_p_list = fw::list_view::create(p_root);
 }
 
 void AppStoreApp::on_resume()
@@ -72,18 +86,28 @@ void AppStoreApp::rebuild()
     lv_obj_clean(m_p_list);
     if (!runtime::is_available()) {
         set_status(LV_SYMBOL_WARNING " No SD card", fw::theme::COLOR_DANGER);
-        lv_obj_add_state(m_p_install_btn, LV_STATE_DISABLED);
+        set_enabled(m_p_install_btn, false);
+        set_enabled(m_p_prev_btn, false);
+        set_enabled(m_p_next_btn, false);
         return;
     }
-    lv_obj_remove_state(m_p_install_btn, LV_STATE_DISABLED);
+    set_enabled(m_p_install_btn, true);
 
     const size_t count = runtime::package_count();
-    for (size_t index = 0U; index < count; ++index) {
+    const size_t page_count = (count == 0U) ? 1U : ((count + PAGE_SIZE - 1U) / PAGE_SIZE);
+    if (m_page >= page_count) {
+        m_page = page_count - 1U; // Gỡ app làm mất trang cuối.
+    }
+    set_enabled(m_p_prev_btn, m_page > 0U);
+    set_enabled(m_p_next_btn, (m_page + 1U) < page_count);
+    const size_t first = m_page * PAGE_SIZE;
+    const size_t last = ((first + PAGE_SIZE) < count) ? (first + PAGE_SIZE) : count;
+    for (size_t index = first; index < last; ++index) {
         runtime::PackageView view{};
         if (runtime::package_at(index, view)) {
             char text[TEXT_LEN] = {};
             (void)std::snprintf(text, sizeof(text), "%s  v%s", view.p_name, view.p_version);
-            lv_obj_t* const p_item = lv_list_add_button(m_p_list, LV_SYMBOL_FILE, text);
+            lv_obj_t* const p_item = fw::list_view::add(m_p_list, LV_SYMBOL_FILE, text);
             lv_obj_set_user_data(p_item, reinterpret_cast<void*>(static_cast<uintptr_t>(index)));
             lv_obj_add_event_cb(p_item, &AppStoreApp::on_package_clicked, LV_EVENT_CLICKED, this);
         }
@@ -94,8 +118,9 @@ void AppStoreApp::rebuild()
         (void)common::copy_string(status, sizeof(status), runtime::last_error());
         set_status(status, fw::theme::COLOR_DANGER);
     } else {
-        (void)std::snprintf(status, sizeof(status), "%u/%u installed",
-                            static_cast<unsigned>(count), static_cast<unsigned>(runtime::MAX_PACKAGES));
+        (void)std::snprintf(status, sizeof(status), "%u/%u installed  -  page %u/%u", static_cast<unsigned>(count),
+                            static_cast<unsigned>(runtime::MAX_PACKAGES), static_cast<unsigned>(m_page + 1U),
+                            static_cast<unsigned>(page_count));
         set_status(status, fw::theme::COLOR_TEXT_MUTED);
     }
 }
@@ -148,6 +173,29 @@ void AppStoreApp::on_install_clicked(lv_event_t* p_event)
         }
         p_self->set_status(text, fw::theme::COLOR_SECONDARY);
     }
+}
+
+void AppStoreApp::change_page(int32_t delta)
+{
+    if ((delta < 0) && (m_page > 0U)) {
+        --m_page;
+    } else if (delta > 0) {
+        ++m_page; // rebuild() chặn lại nếu vượt trang cuối.
+    } else {
+        return;
+    }
+    rebuild();
+    lv_obj_scroll_to_y(m_p_list, 0, LV_ANIM_OFF);
+}
+
+void AppStoreApp::on_prev_clicked(lv_event_t* p_event)
+{
+    static_cast<AppStoreApp*>(lv_event_get_user_data(p_event))->change_page(-1);
+}
+
+void AppStoreApp::on_next_clicked(lv_event_t* p_event)
+{
+    static_cast<AppStoreApp*>(lv_event_get_user_data(p_event))->change_page(1);
 }
 
 void AppStoreApp::on_package_clicked(lv_event_t* p_event)

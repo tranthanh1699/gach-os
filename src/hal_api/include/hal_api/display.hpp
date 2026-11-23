@@ -25,6 +25,12 @@ enum class PixelFormat : uint8_t {
     RGB565_SWAPPED /**< RGB565 big-endian (đa số panel SPI: ILI9341, ST7789). */
 };
 
+/**
+ * @brief Báo một lần đẩy pixel bất đồng bộ đã xong (buffer nguồn dùng lại được).
+ * @note Có thể được gọi từ ngữ cảnh ngắt: chỉ được làm việc ngắn, an toàn ISR.
+ */
+using FlushDoneCallback = void (*)(void* p_ctx);
+
 /** @brief Màn hình đồ họa. Tầng framework chỉ giao tiếp qua interface này. */
 class IDisplay {
 public:
@@ -49,6 +55,25 @@ public:
      * @param[in] p_pixels Dữ liệu pixel theo pixel_format(), số phần tử = diện tích vùng.
      */
     virtual common::Status draw_bitmap(const Area& area, const uint16_t* p_pixels) = 0;
+
+    /** @return true nếu hỗ trợ draw_bitmap_async() (khi đó framework dùng double buffering). */
+    virtual bool supports_async_flush() const { return false; }
+
+    /**
+     * @brief Bắt đầu đẩy một vùng pixel rồi trả về ngay; on_done(p_ctx) được gọi khi xong (có thể từ ISR).
+     *
+     * Framework vẽ dải kế tiếp vào buffer khác trong lúc phần cứng đẩy dải này. Tối đa một lần đẩy đang chạy:
+     * framework luôn chờ on_done trước khi gọi lần kế tiếp. Lỗi khởi động -> trả lỗi, on_done không được gọi.
+     */
+    virtual common::Status draw_bitmap_async(const Area& area, const uint16_t* p_pixels, FlushDoneCallback on_done,
+                                             void* p_ctx)
+    {
+        (void)area;
+        (void)p_pixels;
+        (void)on_done;
+        (void)p_ctx;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
 };
 
 } // namespace hal

@@ -1,0 +1,18 @@
+# Biến tĩnh của runtime (slot của 128 app cài thêm, bộ đệm quét thư mục, ScriptHost, bộ đệm bridge)
+# nằm trong PSRAM thay vì RAM nội: nhường RAM nội cho draw buffer / DMA. Không chứa stack task
+# (osal cấp động từ heap nội). Không bật CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY thì giữ ở RAM nội.
+# Scheme tự định nghĩa: "extram_bss" của IDF nằm trong linker.lf của esp_wifi, chip không có Wi-Fi nội
+# (ESP32-P4) không nạp file đó.
+[scheme:gach_extram_bss]
+entries:
+    if ESP_ALLOW_BSS_SEG_EXTERNAL_MEMORY = y:
+        bss -> extern_ram
+        common -> extern_ram
+    else:
+        bss -> dram0_bss
+        common -> dram0_bss
+
+[mapping:gach_runtime_bss]
+archive: libruntime.a
+entries:
+    * (gach_extram_bss)

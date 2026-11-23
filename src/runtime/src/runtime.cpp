@@ -52,7 +52,7 @@ void set_error(const char* p_subject, const char* p_reason)
     (void)std::snprintf(s_error, sizeof(s_error), "%s: %s", p_subject, p_reason);
 }
 
-// Tĩnh (~2 KiB): không đặt trên stack của task main lúc boot.
+// Tĩnh (~8 KiB): không đặt trên stack của task main lúc boot.
 NameBatch s_batch;
 
 bool ends_with(const char* p_text, const char* p_suffix)
@@ -255,7 +255,7 @@ common::Status init(const hal::Devices& devices, fw::AppManager& apps)
     }
     s_p_fs = devices.p_fs;
     s_p_apps = &apps;
-    s_host.bind(devices.p_fs, devices.app_arena);
+    s_host.bind(devices.p_fs, devices.app_arena, devices.p_http);
     (void)make_dirs(*s_p_fs, APPS_DIR);
     (void)make_dirs(*s_p_fs, INSTALL_DIR);
 

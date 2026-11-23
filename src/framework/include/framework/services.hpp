@@ -32,6 +32,45 @@ struct DeviceInfo {
     bool has_touch;
 };
 
+constexpr uint8_t STATS_MAX_CORES = 2U; /**< Số core tối đa trong SystemStats. */
+
+/**
+ * @brief Chỉ số vận hành tức thời (bộ nhớ, CPU, lưu trữ, nhiệt độ, sóng Wi-Fi).
+ *
+ * Mỗi nhóm có cờ has_* = false khi board không hỗ trợ; khi đó giá trị nhóm bằng 0.
+ */
+struct SystemStats {
+    bool has_memory;
+    uint32_t ram_total;   /**< Heap RAM nội (byte). */
+    uint32_t ram_free;
+    uint32_t ram_min;     /**< Thấp nhất từng ghi nhận. */
+    uint32_t ram_largest; /**< Khối liền lớn nhất còn cấp được. */
+    uint32_t psram_total; /**< 0 nếu không có PSRAM. */
+    uint32_t psram_free;
+    uint32_t psram_min;
+
+    bool has_cpu;
+    uint8_t cpu_cores;
+    uint8_t cpu_load_pct[STATS_MAX_CORES]; /**< 0..100, tính trên khoảng giữa hai lần đọc. */
+    uint16_t task_count;
+    uint32_t cpu_freq_mhz;
+
+    bool has_firmware;
+    uint32_t flash_total;   /**< Chip flash (byte). */
+    uint32_t app_partition; /**< Phân vùng firmware đang chạy. */
+    uint32_t app_used;      /**< Kích thước firmware. */
+
+    bool has_sd;
+    uint64_t sd_total; /**< Thẻ nhớ (byte). */
+    uint64_t sd_free;
+
+    bool has_temperature;
+    float temperature_c; /**< Nhiệt độ chip. */
+
+    bool has_wifi_rssi;
+    int8_t wifi_rssi; /**< dBm của AP đang kết nối. */
+};
+
 /** @brief Dịch vụ hệ thống. */
 class Services : private common::NonCopyable {
 public:
@@ -59,6 +98,12 @@ public:
 
     /** @param[out] info Thông tin thiết bị hiện tại. */
     void device_info(DeviceInfo& info) const;
+
+    /**
+     * @brief Đọc chỉ số vận hành. Gọi khoảng 1 lần/giây là đủ (tải CPU tính theo khoảng giữa hai lần đọc).
+     * @note  Lần đầu có thể chậm vài trăm ms (đếm dung lượng trống thẻ SD).
+     */
+    void system_stats(SystemStats& stats) const;
 
     /** @return Thời gian từ lúc khởi động (ms). */
     uint32_t uptime_ms() const;

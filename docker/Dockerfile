@@ -4,7 +4,8 @@
 #   docker build -t gach-os-idf:latest -f docker/Dockerfile docker
 # (./build.sh tự build image khi cần)
 # ==============================================================================
-ARG IDF_VERSION=v5.4.1
+# v6.1.1: có workaround lỗi phần cứng PPA SRM của ESP32-P4 (DIG-734, PPA treo vĩnh viễn khi xoay một số khối).
+ARG IDF_VERSION=v6.1.1
 FROM espressif/idf:${IDF_VERSION}
 
 LABEL org.opencontainers.image.title="gach-os-idf" \
