@@ -12,7 +12,7 @@
 
 namespace runtime {
 
-constexpr uint8_t SDK_VERSION = 3U; /**< v3: UI co giãn theo màn hình (dp, font), screen_size(). v2: bố cục & kiểu dáng. */
+constexpr uint8_t SDK_VERSION = 4U; /**< v4: sys.stats(), bar/arc/chart. v3: UI co giãn theo màn hình (dp, font), screen_size(). v2: bố cục & kiểu dáng. */
 
 } // namespace runtime
 

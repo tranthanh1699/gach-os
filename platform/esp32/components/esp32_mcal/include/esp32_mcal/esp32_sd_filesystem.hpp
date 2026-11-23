@@ -60,6 +60,7 @@ public:
     common::Status list_dir(const char* p_path, hal::DirCallback callback, void* p_ctx) override;
     common::Status make_dir(const char* p_path) override;
     common::Status remove(const char* p_path) override;
+    common::Status get_capacity(uint64_t& total_bytes, uint64_t& free_bytes) override;
 
 private:
     bool to_native(const char* p_path, char* p_out, size_t out_len) const;

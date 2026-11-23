@@ -58,6 +58,75 @@ void Services::device_info(DeviceInfo& info) const
     info.has_touch = (m_p_devices->p_touch != nullptr);
 }
 
+namespace {
+
+void fill_memory(hal::ISystem& system, SystemStats& stats)
+{
+    hal::MemoryStats mem{};
+    stats.has_memory = (system.get_memory_stats(mem) == common::Status::OK);
+    if (!stats.has_memory) {
+        return;
+    }
+    stats.ram_total = mem.internal_total;
+    stats.ram_free = mem.internal_free;
+    stats.ram_min = mem.internal_min;
+    stats.ram_largest = mem.internal_largest;
+    stats.psram_total = mem.psram_total;
+    stats.psram_free = mem.psram_free;
+    stats.psram_min = mem.psram_min;
+}
+
+void fill_cpu(hal::ISystem& system, SystemStats& stats)
+{
+    hal::SystemInfo info{};
+    system.get_info(info);
+    stats.cpu_freq_mhz = info.cpu_freq_mhz;
+    stats.cpu_cores = info.cpu_cores;
+
+    hal::CpuStats cpu{};
+    stats.has_cpu = (system.get_cpu_stats(cpu) == common::Status::OK);
+    if (!stats.has_cpu) {
+        return;
+    }
+    stats.cpu_cores = (cpu.core_count < STATS_MAX_CORES) ? cpu.core_count : STATS_MAX_CORES;
+    for (uint8_t core = 0U; core < stats.cpu_cores; ++core) {
+        stats.cpu_load_pct[core] = cpu.load_pct[core];
+    }
+    stats.task_count = cpu.task_count;
+}
+
+void fill_firmware(hal::ISystem& system, SystemStats& stats)
+{
+    hal::FirmwareStats fw_stats{};
+    stats.has_firmware = (system.get_firmware_stats(fw_stats) == common::Status::OK);
+    stats.flash_total = fw_stats.flash_total;
+    stats.app_partition = fw_stats.app_partition;
+    stats.app_used = fw_stats.app_used;
+}
+
+} // namespace
+
+void Services::system_stats(SystemStats& stats) const
+{
+    stats = SystemStats{};
+    if ((m_p_devices == nullptr) || (m_p_devices->p_system == nullptr)) {
+        return;
+    }
+    hal::ISystem& system = *m_p_devices->p_system;
+    fill_memory(system, stats);
+    fill_cpu(system, stats);
+    fill_firmware(system, stats);
+    stats.has_temperature = (system.read_temperature(stats.temperature_c) == common::Status::OK);
+
+    hal::IFileSystem* const p_fs = m_p_devices->p_fs;
+    if ((p_fs != nullptr) && p_fs->is_mounted()) {
+        stats.has_sd = (p_fs->get_capacity(stats.sd_total, stats.sd_free) == common::Status::OK);
+    }
+    if (m_p_devices->p_wifi != nullptr) {
+        stats.has_wifi_rssi = m_p_devices->p_wifi->link_rssi(stats.wifi_rssi);
+    }
+}
+
 uint32_t Services::uptime_ms() const
 {
     return osal::tick_ms();

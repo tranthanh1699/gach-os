@@ -1,4 +1,4 @@
-# gach SDK (v3): viết app cài thêm cho gach-os
+# gach SDK (v4): viết app cài thêm cho gach-os
 
 App cài thêm là một **gói `.gapp`** chứa mã Lua 5.4, tương tự file `.jar` trên Nokia S60 hay `.apk` trên Android. Gói chạy trong máy ảo có sandbox, nên cùng một gói chạy được trên mọi board gach-os, bất kể chip hay kích thước màn hình.
 
@@ -100,6 +100,21 @@ Gói app chạy được trên mọi kích thước màn hình. App khai báo `s
 App `sdk<=2` **không đổi hành vi**: số pixel giữ nguyên nghĩa pixel thật, font đúng 14/20/28 px, nên trên màn lớn
 sẽ hiển thị nhỏ nhưng bố cục không vỡ. Muốn co giãn, nâng manifest lên `sdk=3` (yêu cầu gach-os có SDK v3).
 
+#### Widget số liệu (SDK v4, manifest `sdk=4`)
+
+Widget chỉ để hiển thị (không nhận chạm), kiểu phẳng tối: rãnh `0x2C2C2E`, màu chỉ thị mặc định `0x0A84FF`.
+Kích thước tính theo dp như SDK v3.
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `bar(parent, min, max, value?) -> h` | Thanh ngang bo tròn, rộng 100%, cao 8 dp |
+| `arc(parent, min, max, width?) -> h` | Cung tròn 270° (hở phía dưới), 120x120 dp, nét `width` dp (mặc định 10). Đặt `label` làm con rồi `center()` để hiện số ở giữa |
+| `chart(parent, points, min, max) -> h` | Biểu đồ đường cuộn: `points` điểm (2..120), trục Y `min..max`, rộng 100% cao 120 dp, 3 đường lưới ngang |
+| `chart_series(chart, 0xRRGGBB?) -> n` | Thêm một đường (tối đa 4), trả số thứ tự `n` (1, 2...) |
+| `chart_push(chart, n, value)` | Thêm điểm mới vào bên phải đường `n`, các điểm cũ dịch sang trái. Chưa đủ điểm thì phần bên trái để trống |
+| `set_value(h, value)` | Đổi giá trị `bar` / `arc` / `slider` |
+| `set_accent(h, 0xRRGGBB)` | Màu phần chỉ thị của `bar` / `arc` / `slider` (VD: đổi sang đỏ khi vượt ngưỡng) |
+
 ### gach.timer
 
 | Hàm | Mô tả |
@@ -114,7 +129,25 @@ Timer tự **tạm dừng khi app ở nền** và bị hủy khi app đóng.
 | Hàm | Mô tả |
 | :--- | :--- |
 | `uptime_ms() -> int` | Thời gian từ khi máy khởi động |
+| `stats() -> table` | Chỉ số vận hành (SDK v4), xem bảng dưới. Gọi khoảng 1 lần/giây |
 | `time() -> table\|nil` | `{year, month, day, hour, min, sec, wday, utc_offset}`: giờ địa phương theo múi giờ chọn trong Settings. Trả `nil` nếu chưa đồng bộ NTP (chưa có Wi-Fi). `wday`: 0 = Chủ nhật. `utc_offset`: số phút lệch so với UTC |
+
+`stats()` trả về bảng sau. Trường nào board không hỗ trợ thì **là `nil`**, nên luôn kiểm tra trước khi dùng.
+Kích thước tính bằng byte; số vượt 2^31 (VD: dung lượng thẻ SD) là số thực.
+
+| Trường | Nội dung |
+| :--- | :--- |
+| `chip`, `board` | Tên chip (VD `"esp32p4"`), tên board |
+| `uptime_ms` | Thời gian từ khi khởi động |
+| `cpu` | `{cores, mhz, tasks?, load?}`. `load[i]` = % tải core `i` (1 = core 0) tính trên khoảng giữa hai lần gọi `stats()` (lần đầu: trung bình từ lúc khởi động). `tasks` = số task RTOS |
+| `ram` | Heap RAM nội: `{total, free, min, largest}`. `min` = thấp nhất từng ghi nhận, `largest` = khối liền lớn nhất còn cấp được |
+| `psram` | `{total, free, min}`; `nil` nếu board không có PSRAM |
+| `lvgl` | Heap giao diện: `{total, free, used_pct, frag_pct}` |
+| `flash` | `{total, app_size, app_used}`: chip flash, phân vùng firmware, kích thước firmware |
+| `sd` | Thẻ nhớ `{total, free}`; `nil` nếu không có thẻ. Lần gọi đầu có thể chậm (FAT đếm cụm trống), không tính vào giới hạn 500 ms |
+| `temp` | Nhiệt độ chip (°C, số thực) |
+| `fps` | Số lần màn hình vẽ lại mỗi giây kể từ lần gọi trước (màn hình đứng yên thì gần 0) |
+| `wifi` | `{connected, ssid, ip?, rssi?}` (`rssi` dBm); `nil` nếu board không có Wi-Fi |
 
 ### gach.storage (cần `permissions=storage`)
 
@@ -175,6 +208,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 - [`appstore/apps/counter`](../appstore/apps/counter): UI, sự kiện, timer, `gach.storage`.
 - [`appstore/apps/world_clock`](../appstore/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
 - [`appstore/apps/game2048`](../appstore/apps/game2048) (SDK v3): game 2048 với `on_swipe`, bàn cờ vuông co giãn theo màn hình, lưu ván đang chơi và điểm cao nhất.
+- [`appstore/apps/sysmon`](../appstore/apps/sysmon) (SDK v4): System Monitor. Dashboard tải CPU từng core, RAM/PSRAM/heap LVGL, firmware/thẻ SD, nhiệt độ, Wi-Fi, cập nhật mỗi giây bằng `gach.sys.stats()` cùng `arc`, `bar`, `chart`.
 - [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v3): máy tính kiểu điện thoại / máy tính bảng. Dùng `screen_size()` để chọn bố cục (màn rộng có thêm phím khoa học và lịch sử), lưu lịch sử bằng `gach.storage` dạng bộ đệm vòng, và vẽ ký hiệu `÷` bằng `box`.
 
 ## 6. Tương thích
@@ -184,6 +218,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 | 1 | `gach.ui` cơ bản, `timer`, `sys`, `storage`, `app` |
 | 2 | Bố cục & kiểu dáng: `box`, `set_size`, `set_grow`, `set_bg`, `set_radius`, `set_align`, `set_pad`, `set_gap`, `center`, `SYMBOL` |
 | 3 | Co giãn theo màn hình: app `sdk=3` dùng dp và font co giãn; `screen_size`, `on_swipe` (vuốt) |
+| 4 | `sys.stats()` (CPU, bộ nhớ, lưu trữ, nhiệt độ, Wi-Fi); widget `bar`, `arc`, `chart` + `chart_series`/`chart_push`, `set_value`, `set_accent` |
 
 - Runtime từ chối gói có `sdk` lớn hơn `gach.sdk_version` của máy.
 - API đã phát hành **không bao giờ bị xóa hay đổi nghĩa**; SDK mới chỉ thêm API. App viết cho `sdk=1` chạy được trên mọi bản gach-os về sau.

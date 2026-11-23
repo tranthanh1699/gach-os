@@ -55,3 +55,8 @@ CONFIG_ESP_HOSTED_SDIO_GPIO_RESET_SLAVE=54
 # Mempool SDIO (~35 KB, DMA, căn 128 B) tạo trước app_main: RAM nội không còn khối đủ lớn -> assert lúc boot
 # (esp_hosted 2.x). P4 cho DMA đọc PSRAM qua cache -> đặt buffer transport ở PSRAM.
 CONFIG_ESP_HOSTED_MEMPOOL_PREFER_SPIRAM=y
+
+# ---- System Monitor: tải CPU từng core (bộ đếm idle FreeRTOS, nguồn esp_timer µs, 64-bit không tràn) ----
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER=y
+CONFIG_FREERTOS_RUN_TIME_COUNTER_TYPE_U64=y

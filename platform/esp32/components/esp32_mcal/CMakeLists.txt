@@ -16,8 +16,9 @@ idf_component_register(SRCS "src/esp32_clock.cpp"
                             "src/esp32_uart_debug_port.cpp"
                             "src/esp32_wifi.cpp"
                        INCLUDE_DIRS "include"
-                       REQUIRES common mcal hal_api esp_driver_gpio esp_driver_ledc esp_driver_spi esp_driver_sdspi
+                       REQUIRES common mcal hal_api freertos esp_driver_gpio esp_driver_ledc esp_driver_spi esp_driver_sdspi
                                 esp_driver_sdmmc esp_driver_uart esp_event nvs_flash sdmmc
-                       PRIV_REQUIRES spi_flash ${ESP32_MCAL_WIFI_REQUIRES} esp_netif lwip fatfs esp_hw_support)
+                       PRIV_REQUIRES spi_flash ${ESP32_MCAL_WIFI_REQUIRES} esp_netif lwip fatfs esp_hw_support esp_driver_tsens
+                                app_update bootloader_support esp_partition)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE ${OS_STRICT_FLAGS})

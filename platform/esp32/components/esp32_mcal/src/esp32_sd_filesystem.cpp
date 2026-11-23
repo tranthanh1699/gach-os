@@ -242,4 +242,13 @@ common::Status Esp32SdFileSystem::remove(const char* p_path)
     return (result == 0) ? common::Status::OK : common::Status::ERR_IO;
 }
 
+common::Status Esp32SdFileSystem::get_capacity(uint64_t& total_bytes, uint64_t& free_bytes)
+{
+    if (!m_is_mounted) {
+        return common::Status::ERR_STATE;
+    }
+    return (esp_vfs_fat_info(MOUNT_POINT, &total_bytes, &free_bytes) == ESP_OK) ? common::Status::OK
+                                                                                 : common::Status::ERR_IO;
+}
+
 } // namespace esp32_mcal

@@ -73,6 +73,17 @@ public:
      * @return false nếu chưa có IP.
      */
     virtual bool ip_address(char* p_buf, size_t buf_len) const = 0;
+
+    /**
+     * @brief Cường độ sóng của AP đang kết nối.
+     * @param[out] rssi dBm.
+     * @return false nếu chưa kết nối hoặc không hỗ trợ.
+     */
+    virtual bool link_rssi(int8_t& rssi) const
+    {
+        (void)rssi;
+        return false;
+    }
 };
 
 } // namespace hal

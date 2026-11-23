@@ -14,6 +14,8 @@
 
 #include "common/string_utils.hpp"
 #include "framework/list_view.hpp"
+#include "framework/services.hpp"
+#include "framework/system.hpp"
 #include "framework/theme.hpp"
 #include "fs_utils.hpp"
 #include "osal/osal.hpp"
@@ -67,6 +69,22 @@ void* arena_alloc(void* p_ud, void* p_ptr, size_t old_size, size_t new_size)
 }
 
 constexpr uint8_t SDK_SCALED_UI = 3U; /**< Từ SDK v3: kích thước app tính theo dp, font co giãn. */
+
+// ---- SDK v4: widget hiển thị số liệu ----
+constexpr uint32_t GAUGE_TRACK_COLOR = 0x2C2C2EU;  /**< Nền rãnh bar/arc, lưới chart. */
+constexpr uint32_t GAUGE_ACCENT_COLOR = 0x0A84FFU; /**< Màu chỉ thị mặc định. */
+constexpr int32_t BAR_DEFAULT_HEIGHT = 8;          /**< dp. */
+constexpr int32_t ARC_DEFAULT_SIZE = 120;          /**< dp. */
+constexpr int32_t ARC_DEFAULT_THICKNESS = 10;      /**< dp. */
+constexpr int32_t ARC_START_ANGLE = 135;           /**< Cung 270°, hở phía dưới. */
+constexpr int32_t ARC_END_ANGLE = 45;
+constexpr int32_t CHART_DEFAULT_HEIGHT = 120;      /**< dp. */
+constexpr int32_t CHART_LINE_WIDTH = 2;            /**< dp. */
+constexpr int32_t CHART_MIN_POINTS = 2;
+constexpr int32_t CHART_MAX_POINTS = 120;
+constexpr int32_t CHART_MAX_SERIES = 4;
+constexpr uint32_t CHART_HOR_DIV_LINES = 3U;
+constexpr uint32_t MS_PER_S = 1000U;
 
 ScriptHost* host_of(lua_State* p_lua)
 {
@@ -640,6 +658,294 @@ struct ScriptHost::Sdk {
         return 0;
     }
 
+    // ---- gach.ui (SDK v4: widget số liệu) ----
+    static int bar(lua_State* p_lua)
+    {
+        lv_obj_t* const p_parent = object(p_lua, 1);
+        const auto min = static_cast<int32_t>(luaL_checkinteger(p_lua, 2));
+        const auto max = static_cast<int32_t>(luaL_checkinteger(p_lua, 3));
+        luaL_argcheck(p_lua, min < max, 3, "max must be greater than min");
+        lv_obj_t* const p_bar = lv_bar_create(p_parent);
+        lv_obj_remove_style_all(p_bar);
+        lv_obj_set_size(p_bar, LV_PCT(100), fw::theme::px(BAR_DEFAULT_HEIGHT));
+        lv_obj_set_style_bg_color(p_bar, lv_color_hex(GAUGE_TRACK_COLOR), LV_PART_MAIN);
+        lv_obj_set_style_bg_opa(p_bar, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_radius(p_bar, LV_RADIUS_CIRCLE, LV_PART_MAIN);
+        lv_obj_set_style_bg_color(p_bar, lv_color_hex(GAUGE_ACCENT_COLOR), LV_PART_INDICATOR);
+        lv_obj_set_style_bg_opa(p_bar, LV_OPA_COVER, LV_PART_INDICATOR);
+        lv_obj_set_style_radius(p_bar, LV_RADIUS_CIRCLE, LV_PART_INDICATOR);
+        lv_bar_set_range(p_bar, min, max);
+        lv_bar_set_value(p_bar, static_cast<int32_t>(luaL_optinteger(p_lua, 4, min)), LV_ANIM_OFF);
+        return push_new(p_lua, p_bar, 0, LV_EVENT_ALL);
+    }
+
+    static int arc(lua_State* p_lua)
+    {
+        lv_obj_t* const p_parent = object(p_lua, 1);
+        const auto min = static_cast<int32_t>(luaL_checkinteger(p_lua, 2));
+        const auto max = static_cast<int32_t>(luaL_checkinteger(p_lua, 3));
+        luaL_argcheck(p_lua, min < max, 3, "max must be greater than min");
+        const int32_t thickness = to_px(p_lua, luaL_optinteger(p_lua, 4, ARC_DEFAULT_THICKNESS));
+        const int32_t size = fw::theme::px(ARC_DEFAULT_SIZE);
+        lv_obj_t* const p_arc = lv_arc_create(p_parent);
+        lv_obj_remove_style_all(p_arc); // Bỏ cả núm kéo: chỉ để hiển thị.
+        lv_obj_set_size(p_arc, size, size);
+        lv_obj_set_clickable(p_arc, false);
+        for (const lv_part_t part : {LV_PART_MAIN, LV_PART_INDICATOR}) {
+            lv_obj_set_style_arc_width(p_arc, thickness, part);
+            lv_obj_set_style_arc_rounded(p_arc, true, part);
+            lv_obj_set_style_arc_opa(p_arc, LV_OPA_COVER, part);
+        }
+        lv_obj_set_style_arc_color(p_arc, lv_color_hex(GAUGE_TRACK_COLOR), LV_PART_MAIN);
+        lv_obj_set_style_arc_color(p_arc, lv_color_hex(GAUGE_ACCENT_COLOR), LV_PART_INDICATOR);
+        lv_arc_set_bg_angles(p_arc, ARC_START_ANGLE, ARC_END_ANGLE);
+        lv_arc_set_range(p_arc, min, max);
+        lv_arc_set_value(p_arc, min);
+        return push_new(p_lua, p_arc, 0, LV_EVENT_ALL);
+    }
+
+    static int chart(lua_State* p_lua)
+    {
+        lv_obj_t* const p_parent = object(p_lua, 1);
+        const auto points = static_cast<int32_t>(luaL_checkinteger(p_lua, 2));
+        const auto min = static_cast<int32_t>(luaL_checkinteger(p_lua, 3));
+        const auto max = static_cast<int32_t>(luaL_checkinteger(p_lua, 4));
+        luaL_argcheck(p_lua, (points >= CHART_MIN_POINTS) && (points <= CHART_MAX_POINTS), 2, "points must be 2..120");
+        luaL_argcheck(p_lua, min < max, 4, "max must be greater than min");
+        lv_obj_t* const p_chart = lv_chart_create(p_parent);
+        lv_obj_remove_style_all(p_chart);
+        lv_obj_set_size(p_chart, LV_PCT(100), fw::theme::px(CHART_DEFAULT_HEIGHT));
+        lv_obj_set_clickable(p_chart, false);
+        lv_obj_set_style_line_color(p_chart, lv_color_hex(GAUGE_TRACK_COLOR), LV_PART_MAIN); // Lưới.
+        lv_obj_set_style_line_width(p_chart, 1, LV_PART_MAIN);
+        lv_obj_set_style_line_opa(p_chart, LV_OPA_COVER, LV_PART_MAIN);
+        lv_obj_set_style_line_width(p_chart, fw::theme::px(CHART_LINE_WIDTH), LV_PART_ITEMS);
+        lv_obj_set_style_line_rounded(p_chart, true, LV_PART_ITEMS);
+        lv_obj_set_style_width(p_chart, 0, LV_PART_INDICATOR); // Không vẽ chấm tại điểm.
+        lv_obj_set_style_height(p_chart, 0, LV_PART_INDICATOR);
+        lv_chart_set_type(p_chart, LV_CHART_TYPE_LINE);
+        lv_chart_set_update_mode(p_chart, LV_CHART_UPDATE_MODE_SHIFT);
+        lv_chart_set_point_count(p_chart, static_cast<uint32_t>(points));
+        lv_chart_set_axis_range(p_chart, LV_CHART_AXIS_PRIMARY_Y, min, max);
+        lv_chart_set_div_line_count(p_chart, CHART_HOR_DIV_LINES, 0U);
+        return push_new(p_lua, p_chart, 0, LV_EVENT_ALL);
+    }
+
+    static lv_obj_t* chart_object(lua_State* p_lua, int arg)
+    {
+        lv_obj_t* const p_chart = object(p_lua, arg);
+        luaL_argcheck(p_lua, lv_obj_check_type(p_chart, &lv_chart_class), arg, "not a chart");
+        return p_chart;
+    }
+
+    static int chart_series(lua_State* p_lua)
+    {
+        lv_obj_t* const p_chart = chart_object(p_lua, 1);
+        const auto color = static_cast<uint32_t>(luaL_optinteger(p_lua, 2, GAUGE_ACCENT_COLOR));
+        int32_t count = 0;
+        for (lv_chart_series_t* p_ser = lv_chart_get_series_next(p_chart, nullptr); p_ser != nullptr;
+             p_ser = lv_chart_get_series_next(p_chart, p_ser)) {
+            ++count;
+        }
+        luaL_argcheck(p_lua, count < CHART_MAX_SERIES, 1, "too many series (max 4)");
+        if (lv_chart_add_series(p_chart, lv_color_hex(color), LV_CHART_AXIS_PRIMARY_Y) == nullptr) {
+            return luaL_error(p_lua, "out of UI memory");
+        }
+        lua_pushinteger(p_lua, count + 1);
+        return 1;
+    }
+
+    static int chart_push(lua_State* p_lua)
+    {
+        lv_obj_t* const p_chart = chart_object(p_lua, 1);
+        const lua_Integer index = luaL_checkinteger(p_lua, 2);
+        const auto value = static_cast<int32_t>(luaL_checknumber(p_lua, 3));
+        lv_chart_series_t* p_ser = lv_chart_get_series_next(p_chart, nullptr);
+        for (lua_Integer i = 1; (p_ser != nullptr) && (i < index); ++i) {
+            p_ser = lv_chart_get_series_next(p_chart, p_ser);
+        }
+        luaL_argcheck(p_lua, (index >= 1) && (p_ser != nullptr), 2, "invalid series");
+        lv_chart_set_next_value(p_chart, p_ser, value);
+        return 0;
+    }
+
+    static int set_value(lua_State* p_lua)
+    {
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        const auto value = static_cast<int32_t>(luaL_checknumber(p_lua, 2));
+        if (lv_obj_check_type(p_obj, &lv_arc_class)) {
+            lv_arc_set_value(p_obj, value);
+        } else if (lv_obj_check_type(p_obj, &lv_slider_class)) {
+            lv_slider_set_value(p_obj, value, LV_ANIM_OFF);
+        } else if (lv_obj_check_type(p_obj, &lv_bar_class)) {
+            lv_bar_set_value(p_obj, value, LV_ANIM_OFF);
+        } else {
+            return luaL_argerror(p_lua, 1, "expected bar, arc or slider");
+        }
+        return 0;
+    }
+
+    static int set_accent(lua_State* p_lua)
+    {
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        const lv_color_t color = lv_color_hex(static_cast<uint32_t>(luaL_checkinteger(p_lua, 2)));
+        if (lv_obj_check_type(p_obj, &lv_arc_class)) {
+            lv_obj_set_style_arc_color(p_obj, color, LV_PART_INDICATOR);
+        } else {
+            lv_obj_set_style_bg_color(p_obj, color, LV_PART_INDICATOR); // bar, slider.
+        }
+        return 0;
+    }
+
+    // ---- gach.sys.stats (SDK v4) ----
+    /** @brief Số byte: integer nếu vừa 32 bit (Lua build số nguyên 32 bit), không thì số thực. */
+    static void push_bytes(lua_State* p_lua, const char* p_key, uint64_t bytes)
+    {
+        if (bytes <= static_cast<uint64_t>(INT32_MAX)) {
+            lua_pushinteger(p_lua, static_cast<lua_Integer>(bytes));
+        } else {
+            lua_pushnumber(p_lua, static_cast<lua_Number>(bytes));
+        }
+        lua_setfield(p_lua, -2, p_key);
+    }
+
+    static void push_int(lua_State* p_lua, const char* p_key, int32_t value)
+    {
+        lua_pushinteger(p_lua, static_cast<lua_Integer>(value));
+        lua_setfield(p_lua, -2, p_key);
+    }
+
+    static void push_memory(lua_State* p_lua, const fw::SystemStats& st)
+    {
+        lua_createtable(p_lua, 0, 4);
+        push_bytes(p_lua, "total", st.ram_total);
+        push_bytes(p_lua, "free", st.ram_free);
+        push_bytes(p_lua, "min", st.ram_min);
+        push_bytes(p_lua, "largest", st.ram_largest);
+        lua_setfield(p_lua, -2, "ram");
+        if (st.psram_total > 0U) {
+            lua_createtable(p_lua, 0, 3);
+            push_bytes(p_lua, "total", st.psram_total);
+            push_bytes(p_lua, "free", st.psram_free);
+            push_bytes(p_lua, "min", st.psram_min);
+            lua_setfield(p_lua, -2, "psram");
+        }
+        lv_mem_monitor_t mon{};
+        lv_mem_monitor(&mon);
+        lua_createtable(p_lua, 0, 4);
+        push_bytes(p_lua, "total", mon.total_size);
+        push_bytes(p_lua, "free", mon.free_size);
+        push_int(p_lua, "used_pct", mon.used_pct);
+        push_int(p_lua, "frag_pct", mon.frag_pct);
+        lua_setfield(p_lua, -2, "lvgl");
+    }
+
+    static void push_cpu(lua_State* p_lua, const fw::SystemStats& st)
+    {
+        lua_createtable(p_lua, 0, 4);
+        push_int(p_lua, "cores", st.cpu_cores);
+        push_int(p_lua, "mhz", static_cast<int32_t>(st.cpu_freq_mhz));
+        if (st.has_cpu) {
+            push_int(p_lua, "tasks", st.task_count);
+            lua_createtable(p_lua, st.cpu_cores, 0);
+            for (uint8_t core = 0U; core < st.cpu_cores; ++core) {
+                lua_pushinteger(p_lua, st.cpu_load_pct[core]);
+                lua_rawseti(p_lua, -2, core + 1);
+            }
+            lua_setfield(p_lua, -2, "load");
+        }
+        lua_setfield(p_lua, -2, "cpu");
+    }
+
+    static void push_storage(lua_State* p_lua, const fw::SystemStats& st)
+    {
+        if (st.has_firmware) {
+            lua_createtable(p_lua, 0, 3);
+            push_bytes(p_lua, "total", st.flash_total);
+            push_bytes(p_lua, "app_size", st.app_partition);
+            push_bytes(p_lua, "app_used", st.app_used);
+            lua_setfield(p_lua, -2, "flash");
+        }
+        if (st.has_sd) {
+            lua_createtable(p_lua, 0, 2);
+            push_bytes(p_lua, "total", st.sd_total);
+            push_bytes(p_lua, "free", st.sd_free);
+            lua_setfield(p_lua, -2, "sd");
+        }
+    }
+
+    static void push_wifi(lua_State* p_lua, const fw::Services& services, const fw::SystemStats& st)
+    {
+        const fw::WifiService& wifi = services.wifi();
+        if (!wifi.is_available()) {
+            return;
+        }
+        lua_createtable(p_lua, 0, 4);
+        const bool connected = (wifi.status() == fw::WifiStatus::CONNECTED);
+        lua_pushboolean(p_lua, connected ? 1 : 0);
+        lua_setfield(p_lua, -2, "connected");
+        lua_pushstring(p_lua, wifi.current_ssid());
+        lua_setfield(p_lua, -2, "ssid");
+        char ip[fw::IP_ADDRESS_BUF_LEN] = {};
+        if (wifi.ip_address(ip, sizeof(ip))) {
+            lua_pushstring(p_lua, ip);
+            lua_setfield(p_lua, -2, "ip");
+        }
+        if (st.has_wifi_rssi) {
+            push_int(p_lua, "rssi", st.wifi_rssi);
+        }
+        lua_setfield(p_lua, -2, "wifi");
+    }
+
+    /** @return Số lần vẽ lại mỗi giây kể từ lần gọi trước (cùng bộ đếm với lớp phủ hiệu năng). */
+    static lua_Number redraw_rate()
+    {
+        static uint32_t s_prev_frames = 0U;
+        static uint32_t s_prev_ms = 0U;
+        fw::PerfStats perf{};
+        fw::perf_snapshot(perf, false);
+        const uint32_t now = osal::tick_ms();
+        const uint32_t elapsed = now - s_prev_ms;
+        // Bộ đếm bị reset (gach perf reset) -> chỉ lấy mốc mới.
+        const uint32_t frames = (perf.frames >= s_prev_frames) ? (perf.frames - s_prev_frames) : 0U;
+        const bool valid = (s_prev_ms != 0U) && (elapsed > 0U);
+        s_prev_frames = perf.frames;
+        s_prev_ms = now;
+        return valid ? ((static_cast<lua_Number>(frames) * MS_PER_S) / elapsed) : 0.0;
+    }
+
+    static int stats(lua_State* p_lua)
+    {
+        ScriptHost* const p_host = host_of(p_lua);
+        const uint32_t io_start = osal::tick_ms();
+        fw::SystemStats st{};
+        p_host->m_p_services->system_stats(st); // Có thể đọc thẻ SD -> không tính vào ngân sách script.
+        credit_io_time(*p_host, io_start);
+
+        fw::DeviceInfo info{};
+        p_host->m_p_services->device_info(info);
+
+        lua_newtable(p_lua);
+        lua_pushstring(p_lua, (info.p_chip_name != nullptr) ? info.p_chip_name : "");
+        lua_setfield(p_lua, -2, "chip");
+        lua_pushstring(p_lua, (info.p_board_name != nullptr) ? info.p_board_name : "");
+        lua_setfield(p_lua, -2, "board");
+        push_int(p_lua, "uptime_ms", static_cast<int32_t>(p_host->m_p_services->uptime_ms()));
+        if (st.has_memory) {
+            push_memory(p_lua, st);
+        }
+        push_cpu(p_lua, st);
+        push_storage(p_lua, st);
+        if (st.has_temperature) {
+            lua_pushnumber(p_lua, static_cast<lua_Number>(st.temperature_c));
+            lua_setfield(p_lua, -2, "temp");
+        }
+        lua_pushnumber(p_lua, redraw_rate());
+        lua_setfield(p_lua, -2, "fps");
+        push_wifi(p_lua, *p_host->m_p_services, st);
+        return 1;
+    }
+
     static void add_table(lua_State* p_lua, const char* p_name, const luaL_Reg* p_funcs)
     {
         lua_newtable(p_lua);
@@ -675,9 +981,13 @@ struct ScriptHost::Sdk {
                                       {"set_pad", set_pad},   {"set_gap", set_gap},   {"center", center},
                                       // SDK v3
                                       {"screen_size", screen_size}, {"on_swipe", on_swipe},
+                                      // SDK v4
+                                      {"bar", bar},           {"arc", arc},           {"chart", chart},
+                                      {"chart_series", chart_series}, {"chart_push", chart_push},
+                                      {"set_value", set_value}, {"set_accent", set_accent},
                                       {nullptr, nullptr}};
         static const luaL_Reg TIMER[] = {{"every", timer_every}, {"cancel", timer_cancel}, {nullptr, nullptr}};
-        static const luaL_Reg SYS[] = {{"uptime_ms", uptime_ms}, {"time", time}, {nullptr, nullptr}};
+        static const luaL_Reg SYS[] = {{"uptime_ms", uptime_ms}, {"time", time}, {"stats", stats}, {nullptr, nullptr}};
         static const luaL_Reg STORAGE[] = {{"get", storage_get}, {"set", storage_set}, {nullptr, nullptr}};
         static const luaL_Reg APP[] = {{"exit", app_exit}, {nullptr, nullptr}};
         lua_newtable(p_lua);
