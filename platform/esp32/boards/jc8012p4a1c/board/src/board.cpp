@@ -33,6 +33,7 @@ esp32_mcal::Esp32Clock s_clock;
 // Panel/touch gắn chặt SDK (MIPI-DSI, PPA, esp_lcd_touch) -> hiện thực ở board, không ở drivers/.
 board::Jd9365Display s_display{board::cfg::DISPLAY};
 board::Gsl3680Touch s_touch{board::cfg::TOUCH};
+i2c_master_bus_handle_t s_i2c_bus = nullptr;
 drivers::PwmBacklight s_backlight{s_backlight_pwm, board::cfg::BACKLIGHT_ACTIVE_HIGH};
 
 // Display/touch init bởi framework (fw::start) trong UI task.
@@ -56,6 +57,21 @@ namespace hal {
 const Devices& board_init()
 {
     using namespace board::cfg;
+
+    // Bus I2C1 dùng chung (touch, codec...): tạo một lần ở board, chia cho các thiết bị.
+    i2c_master_bus_config_t bus_cfg{};
+    bus_cfg.i2c_port = I2C_PORT;
+    bus_cfg.sda_io_num = I2C_SDA;
+    bus_cfg.scl_io_num = I2C_SCL;
+    bus_cfg.clk_source = I2C_CLK_SRC_DEFAULT;
+    bus_cfg.glitch_ignore_cnt = I2C_GLITCH_FILTER_CYCLES;
+    bus_cfg.flags.enable_internal_pullup = 1U;
+    if (i2c_new_master_bus(&bus_cfg, &s_i2c_bus) == ESP_OK) {
+        s_touch.attach_bus(s_i2c_bus);
+    } else {
+        ESP_LOGW(TAG, "I2C bus unavailable: no touch");
+        s_devices.p_touch = nullptr;
+    }
 
     // Backlight tắt (duty 0) cho tới khi framework vẽ xong khung đầu tiên.
     if (optional(s_backlight_pwm.init(BACKLIGHT_PWM), "Backlight PWM")) {

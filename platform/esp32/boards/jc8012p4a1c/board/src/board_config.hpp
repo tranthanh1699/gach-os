@@ -17,6 +17,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "driver/i2c_master.h"
 #include "driver/sdmmc_host.h"
 #include "esp32_mcal/esp32_pwm.hpp"
 #include "esp32_mcal/esp32_sd_filesystem.hpp"
@@ -49,9 +50,15 @@ constexpr Jd9365Config DISPLAY{
 constexpr esp32_mcal::PwmConfig BACKLIGHT_PWM{GPIO_NUM_23, LEDC_TIMER_1, LEDC_CHANNEL_1, 20000U, LEDC_TIMER_10_BIT};
 constexpr bool BACKLIGHT_ACTIVE_HIGH = true;
 
-// ---- Touch: GSL3680 trên I2C1 (SDA 7, SCL 8) @ 400 kHz ----
+// ---- Bus I2C1 dùng chung (schematic: RTC_SDA1/SCL1 = ES_I2C): touch GSL3680, codec ES8311, SCCB cổng camera ----
+constexpr i2c_port_num_t I2C_PORT = I2C_NUM_1;
+constexpr gpio_num_t I2C_SDA = GPIO_NUM_7;
+constexpr gpio_num_t I2C_SCL = GPIO_NUM_8;
+constexpr uint8_t I2C_GLITCH_FILTER_CYCLES = 7U;
+
+// ---- Touch: GSL3680 @ 400 kHz ----
 constexpr Gsl3680Config TOUCH{
-    I2C_NUM_1, GPIO_NUM_7 /*SDA*/, GPIO_NUM_8 /*SCL*/, 400000U,
+    400000U,
     GPIO_NUM_22 /*RST*/, GPIO_NUM_21 /*INT*/,
     PANEL_WIDTH, PANEL_HEIGHT,
     false /*mirror_x*/, true /*mirror_y*/, // Giá trị BSP hãng cho panel 800x1280.

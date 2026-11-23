@@ -2,7 +2,7 @@
  * @file    gsl3680_touch.cpp
  * @brief   Khởi tạo bus I2C + GSL3680, đọc điểm chạm và xoay sang hệ tọa độ logic.
  *
- * Tham số port từ BSP của hãng: vendor/esp32_p4_function_ev_board (bsp_i2c_init, bsp_touch_new).
+ * Tham số port từ BSP của hãng: vendor/esp32_p4_function_ev_board (bsp_touch_new). Bus I2C do board tạo.
  */
 #include "gsl3680_touch.hpp"
 
@@ -22,7 +22,6 @@ constexpr const char* TAG = "gsl3680";
 constexpr uint16_t GSL3680_I2C_ADDRESS = 0x40U;
 constexpr uint8_t GSL3680_CMD_BITS = 8U;
 constexpr size_t GSL3680_CONTROL_PHASE_BYTES = 1U;
-constexpr uint8_t I2C_GLITCH_FILTER_CYCLES = 7U;
 constexpr uint8_t MAX_POINTS = 1U;
 
 /** @brief Kẹp giá trị vào [0, limit - 1]. */
@@ -51,19 +50,8 @@ Gsl3680Touch::Gsl3680Touch(const Gsl3680Config& cfg) : m_cfg(cfg), m_p_bus(nullp
 
 common::Status Gsl3680Touch::init()
 {
-    if (m_p_touch != nullptr) {
+    if ((m_p_touch != nullptr) || (m_p_bus == nullptr)) {
         return common::Status::ERR_STATE;
-    }
-
-    i2c_master_bus_config_t bus_cfg{};
-    bus_cfg.i2c_port = m_cfg.i2c_port;
-    bus_cfg.sda_io_num = m_cfg.sda;
-    bus_cfg.scl_io_num = m_cfg.scl;
-    bus_cfg.clk_source = I2C_CLK_SRC_DEFAULT;
-    bus_cfg.glitch_ignore_cnt = I2C_GLITCH_FILTER_CYCLES;
-    bus_cfg.flags.enable_internal_pullup = 1U;
-    if (!check(i2c_new_master_bus(&bus_cfg, &m_p_bus), "I2C bus")) {
-        return common::Status::ERR_IO;
     }
 
     esp_lcd_panel_io_i2c_config_t io_cfg{};

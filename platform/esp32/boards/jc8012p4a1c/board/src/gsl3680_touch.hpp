@@ -20,10 +20,7 @@ namespace board {
 
 /** @brief Cấu hình GSL3680. */
 struct Gsl3680Config {
-    i2c_port_num_t i2c_port;
-    gpio_num_t sda;
-    gpio_num_t scl;
-    uint32_t i2c_clock_hz;
+    uint32_t i2c_clock_hz; /**< Tốc độ I2C của thiết bị (bus I2C do board tạo, dùng chung). */
     gpio_num_t reset_pin;
     gpio_num_t irq_pin;
     uint16_t panel_width;  /**< Hệ tọa độ gốc của panel (hướng dọc). */
@@ -37,6 +34,9 @@ struct Gsl3680Config {
 class Gsl3680Touch final : public hal::ITouch, private common::NonCopyable {
 public:
     explicit Gsl3680Touch(const Gsl3680Config& cfg);
+
+    /** @brief Bus I2C dùng chung – gọi trước init(). */
+    void attach_bus(i2c_master_bus_handle_t p_bus) { m_p_bus = p_bus; }
 
     /** @note Nạp firmware vào GSL3680 qua I2C (vài trăm ms). */
     common::Status init() override;
