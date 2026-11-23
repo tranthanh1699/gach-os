@@ -4,6 +4,8 @@
  */
 #include "app_store_app.hpp"
 
+#include "alert.hpp"
+
 #include <cstdio>
 
 #include "common/string_utils.hpp"
@@ -139,14 +141,11 @@ void AppStoreApp::confirm_uninstall(size_t index)
     }
     (void)common::copy_string(m_selected_id, sizeof(m_selected_id), view.p_id);
     char title[TEXT_LEN] = {};
-    (void)std::snprintf(title, sizeof(title), "Uninstall %s?", view.p_name);
-
-    m_p_dialog = lv_msgbox_create(nullptr);
-    lv_msgbox_add_title(m_p_dialog, title);
-    lv_obj_t* const p_ok = lv_msgbox_add_footer_button(m_p_dialog, "Uninstall");
-    lv_obj_add_event_cb(p_ok, &AppStoreApp::on_uninstall_confirmed, LV_EVENT_CLICKED, this);
-    lv_obj_t* const p_cancel = lv_msgbox_add_footer_button(m_p_dialog, "Cancel");
-    lv_obj_add_event_cb(p_cancel, &AppStoreApp::on_dialog_cancel, LV_EVENT_CLICKED, this);
+    (void)std::snprintf(title, sizeof(title), "Uninstall \"%s\"?", view.p_name);
+    m_p_dialog = alert::show(title, "The app and all of its data will be removed from this device.",
+                             alert::Action{"Cancel", alert::COLOR_CANCEL, &AppStoreApp::on_dialog_cancel},
+                             alert::Action{"Uninstall", alert::COLOR_DESTRUCTIVE, &AppStoreApp::on_uninstall_confirmed},
+                             this);
 }
 
 void AppStoreApp::close_dialog()

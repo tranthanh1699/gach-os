@@ -4,6 +4,8 @@
  */
 #include "settings_app.hpp"
 
+#include "alert.hpp"
+
 #include <cstdio>
 #include <cstdlib>
 
@@ -559,13 +561,10 @@ void SettingsApp::on_restart_clicked(lv_event_t* p_event)
     if (p_self->m_p_dialog != nullptr) {
         return;
     }
-    p_self->m_p_dialog = lv_msgbox_create(nullptr);
-    lv_msgbox_add_title(p_self->m_p_dialog, "Restart device?");
-    lv_obj_t* const p_ok = lv_msgbox_add_footer_button(p_self->m_p_dialog, "Restart");
-    lv_obj_set_style_bg_color(p_ok, lv_color_hex(glist::COLOR_DESTRUCTIVE), 0);
-    lv_obj_add_event_cb(p_ok, &SettingsApp::on_dialog_confirm, LV_EVENT_CLICKED, p_self);
-    lv_obj_t* const p_cancel = lv_msgbox_add_footer_button(p_self->m_p_dialog, "Cancel");
-    lv_obj_add_event_cb(p_cancel, &SettingsApp::on_dialog_cancel, LV_EVENT_CLICKED, p_self);
+    p_self->m_p_dialog = alert::show("Restart device?", "Open apps will be closed.",
+                                     alert::Action{"Cancel", alert::COLOR_CANCEL, &SettingsApp::on_dialog_cancel},
+                                     alert::Action{"Restart", alert::COLOR_DESTRUCTIVE, &SettingsApp::on_dialog_confirm},
+                                     p_self);
 }
 
 void SettingsApp::on_dialog_confirm(lv_event_t* p_event)
