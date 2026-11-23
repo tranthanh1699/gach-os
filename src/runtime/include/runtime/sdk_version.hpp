@@ -12,7 +12,7 @@
 
 namespace runtime {
 
-constexpr uint8_t SDK_VERSION = 6U; /**< v6: ui.on, nút nhiều kiểu, widget nhập liệu, alert/toast, style, animate. v5: net.get (HTTPS), json.decode. v4: sys.stats(), bar/arc/chart. v3: UI co giãn theo màn hình (dp, font), screen_size(). v2: bố cục & kiểu dáng. */
+constexpr uint8_t SDK_VERSION = 7U; /**< v7: gach.log. v6: ui.on, nút nhiều kiểu, widget nhập liệu, alert/toast, style, animate. v5: net.get (HTTPS), json.decode. v4: sys.stats(), bar/arc/chart. v3: UI co giãn theo màn hình (dp, font), screen_size(). v2: bố cục & kiểu dáng. */
 
 } // namespace runtime
 

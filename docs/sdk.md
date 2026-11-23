@@ -1,4 +1,4 @@
-# gach SDK (v6): viết app cài thêm cho gach-os
+# gach SDK (v7): viết app cài thêm cho gach-os
 
 App cài thêm là một **gói `.gapp`** chứa mã Lua 5.4, tương tự file `.jar` trên Nokia S60 hay `.apk` trên Android. Gói chạy trong máy ảo có sandbox, nên cùng một gói chạy được trên mọi board gach-os, bất kể chip hay kích thước màn hình.
 
@@ -256,6 +256,20 @@ gach.net.get("https://api.open-meteo.com/v1/forecast?latitude=21.03&longitude=10
   end)
 ```
 
+### gach.log (SDK v7)
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `e(...)`, `w(...)`, `i(...)`, `d(...)`, `v(...)` | Ghi log mức ERROR / WARN / INFO / DEBUG / VERBOSE, tag = id của app; tham số nối bằng dấu cách như `print` |
+
+Mặc định chỉ hiện từ INFO trở lên; bật chi tiết cho riêng app: `tools/gach loglevel <app_id> d`. Định dạng và cách xem:
+[logging.md](logging.md).
+
+```lua
+gach.log.d("GET", url)          -- chỉ hiện khi bật mức debug cho app
+gach.log.w("retry", attempt)
+```
+
 ### gach.storage (cần `permissions=storage`)
 
 | Hàm | Mô tả |
@@ -271,7 +285,7 @@ Dữ liệu lưu trong `apps/<id>/data.ini` trên thẻ SD và **được giữ 
 | :--- | :--- |
 | `gach.app.exit()` | Đóng app (về màn hình trước) |
 | `gach.sdk_version` | Số phiên bản SDK của máy |
-| `print(...)` | Ghi log ra cổng serial (`./build.sh monitor`) |
+| `print(...)` | Ghi log mức INFO, tag = id của app (xem bằng `gach logcat` / `gach dmesg`) |
 
 Thư viện Lua có sẵn: `string`, `table`, `math`, `utf8`, `coroutine` và các hàm cơ bản. Sandbox **không có** `io`, `os`, `require`, `load`, `dofile`.
 
@@ -331,6 +345,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 | 4 | `sys.stats()` (CPU, bộ nhớ, lưu trữ, nhiệt độ, Wi-Fi); widget `bar`, `arc`, `chart` + `chart_series`/`chart_push`, `set_value`, `set_accent` |
 | 5 | `net.get` (HTTP/HTTPS, quyền `network`), `json.decode`, `ui.set_pos` |
 | 6 | `ui.on`/`off` (đa sự kiện), nút `variant`/`size`/`icon`/`shape`, `textfield` + bàn phím hệ thống, `switch`, `checkbox`, `segmented`, `dropdown`, `spinner`, `get_value`/`get_text`, `set_enabled`/`set_visible`, `alert`, `toast`, `style`, `animate`, thêm `SYMBOL`; giới hạn 256 widget |
+| 7 | `gach.log.e/w/i/d/v` (log theo mức, tag = id app); `print` đi qua cùng bộ log |
 
 - Runtime từ chối gói có `sdk` lớn hơn `gach.sdk_version` của máy.
 - API đã phát hành **không bao giờ bị xóa hay đổi nghĩa**; SDK mới chỉ thêm API. App viết cho `sdk=1` chạy được trên mọi bản gach-os về sau.

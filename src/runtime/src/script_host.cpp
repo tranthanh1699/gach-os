@@ -12,6 +12,7 @@
 #include <cstring>
 #include <initializer_list>
 
+#include "common/log.hpp"
 #include "common/string_utils.hpp"
 #include "framework/list_view.hpp"
 #include "framework/services.hpp"
@@ -961,17 +962,36 @@ struct ScriptHost::Sdk {
     }
 
     // ---- toàn cục ----
-    static int print(lua_State* p_lua)
+    /** @brief Ghi các tham số (tostring, cách nhau dấu cách) vào gach log, tag = id của app. */
+    static int log_args(lua_State* p_lua, common::log::Level level)
     {
-        const int count = lua_gettop(p_lua);
-        std::printf("[%s]", host_of(p_lua)->m_manifest.id);
-        for (int index = 1; index <= count; ++index) {
-            std::printf(" %s", luaL_tolstring(p_lua, index, nullptr));
-            lua_pop(p_lua, 1);
+        const char* const p_tag = host_of(p_lua)->m_manifest.id;
+        if (!common::log::is_enabled(level, p_tag)) {
+            return 0; // Không format khi mức log đang tắt.
         }
-        std::printf("\n");
+        const int count = lua_gettop(p_lua);
+        luaL_Buffer buf;
+        luaL_buffinit(p_lua, &buf);
+        for (int index = 1; index <= count; ++index) {
+            if (index > 1) {
+                luaL_addchar(&buf, ' ');
+            }
+            (void)luaL_tolstring(p_lua, index, nullptr);
+            luaL_addvalue(&buf);
+        }
+        luaL_pushresult(&buf);
+        common::log::write(level, p_tag, "%s", lua_tostring(p_lua, -1));
         return 0;
     }
+
+    static int print(lua_State* p_lua) { return log_args(p_lua, common::log::Level::INFO); }
+
+    // ---- gach.log (SDK v7) ----
+    static int log_e(lua_State* p_lua) { return log_args(p_lua, common::log::Level::ERROR); }
+    static int log_w(lua_State* p_lua) { return log_args(p_lua, common::log::Level::WARN); }
+    static int log_i(lua_State* p_lua) { return log_args(p_lua, common::log::Level::INFO); }
+    static int log_d(lua_State* p_lua) { return log_args(p_lua, common::log::Level::DEBUG); }
+    static int log_v(lua_State* p_lua) { return log_args(p_lua, common::log::Level::VERBOSE); }
 
     // ---- gach.ui (SDK v4: widget số liệu) ----
     static int bar(lua_State* p_lua)
@@ -1303,6 +1323,7 @@ struct ScriptHost::Sdk {
             lua_pushstring(p_lua, p_reason);
             return 2;
         }
+        LOGD(p_host->m_manifest.id, "GET %s", p_url);
         lua_pushvalue(p_lua, 2);
         p_host->m_net_ref = luaL_ref(p_lua, LUA_REGISTRYINDEX);
         p_host->m_p_net_timer = lv_timer_create(&ScriptHost::on_net_poll, NET_POLL_MS, p_host);
@@ -1374,6 +1395,8 @@ struct ScriptHost::Sdk {
         static const luaL_Reg APP[] = {{"exit", app_exit}, {nullptr, nullptr}};
         static const luaL_Reg NET[] = {{"get", net_get}, {nullptr, nullptr}};
         static const luaL_Reg JSON[] = {{"decode", json_decode}, {nullptr, nullptr}};
+        static const luaL_Reg LOG[] = {{"e", log_e}, {"w", log_w}, {"i", log_i},
+                                       {"d", log_d}, {"v", log_v}, {nullptr, nullptr}};
         lua_newtable(p_lua);
         add_table(p_lua, "ui", UI);
         (void)lua_getfield(p_lua, -1, "ui");
@@ -1387,6 +1410,7 @@ struct ScriptHost::Sdk {
         add_table(p_lua, "app", APP);
         add_table(p_lua, "net", NET);
         add_table(p_lua, "json", JSON);
+        add_table(p_lua, "log", LOG);
         lua_pushinteger(p_lua, SDK_VERSION);
         lua_setfield(p_lua, -2, "sdk_version");
         lua_setglobal(p_lua, "gach");
@@ -1649,7 +1673,7 @@ void ScriptHost::invoke(int ref, const int32_t* p_arg)
 
 void ScriptHost::fault(const char* p_message)
 {
-    std::printf("[%s] script error: %s\n", m_manifest.id, p_message);
+    LOGE(m_manifest.id, "script error: %s", p_message);
     if (m_faulted) {
         return;
     }
@@ -1798,10 +1822,14 @@ void ScriptHost::on_net_poll(lv_timer_t* p_timer)
     lua_rawgeti(p_lua, LUA_REGISTRYINDEX, ref);
     luaL_unref(p_lua, LUA_REGISTRYINDEX, ref);
     if (result.status == common::Status::OK) {
+        LOGD(p_self->m_manifest.id, "GET -> %d, %u bytes%s", static_cast<int>(result.http_code),
+             static_cast<unsigned>(result.body_len), result.truncated ? " (truncated)" : "");
         lua_pushinteger(p_lua, static_cast<lua_Integer>(result.http_code));
         lua_pushlstring(p_lua, reinterpret_cast<const char*>(p_http->body()), result.body_len); // Copy vào arena.
         lua_pushboolean(p_lua, result.truncated ? 1 : 0);
     } else {
+        LOGW(p_self->m_manifest.id, "GET failed: %s",
+             (result.status == common::Status::ERR_TIMEOUT) ? "timeout" : "network error");
         lua_pushinteger(p_lua, 0);
         lua_pushstring(p_lua, (result.status == common::Status::ERR_TIMEOUT) ? "timeout" : "network error");
         lua_pushboolean(p_lua, 0);
