@@ -1,4 +1,5 @@
-# Biến tĩnh của runtime (slot của 128 app cài thêm, bộ đệm quét thư mục, ScriptHost, bộ đệm bridge)
+# Biến tĩnh của runtime (slot của 128 app cài thêm, bộ đệm quét thư mục, ScriptHost, bộ đệm bridge) và của apps
+# (app tích hợp: bộ đệm File Manager ~70 KiB...)
 # nằm trong PSRAM thay vì RAM nội: nhường RAM nội cho draw buffer / DMA. Không chứa stack task
 # (osal cấp động từ heap nội). Không bật CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY thì giữ ở RAM nội.
 # Scheme tự định nghĩa: "extram_bss" của IDF nằm trong linker.lf của esp_wifi, chip không có Wi-Fi nội
@@ -14,5 +15,10 @@ entries:
 
 [mapping:gach_runtime_bss]
 archive: libruntime.a
+entries:
+    * (gach_extram_bss)
+
+[mapping:gach_apps_bss]
+archive: libapps.a
 entries:
     * (gach_extram_bss)
