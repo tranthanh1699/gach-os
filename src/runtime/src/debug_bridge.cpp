@@ -60,6 +60,7 @@ constexpr uint32_t LOG_LOCK_TIMEOUT_MS = 20U;         /**< Không chờ lâu tro
 constexpr uint32_t REBOOT_DELAY_MS = 200U;            /**< Cho RESP kịp ra dây trước khi khởi động lại. */
 constexpr uint32_t TASK_STACK_BYTES = 6U * 1024U;
 constexpr uint8_t TASK_PRIORITY = 2U;                 /**< Dưới task UI: bridge không làm giật giao diện. */
+constexpr int8_t TASK_CORE = 0;                        /**< Việc nền ở core 0, UI ở core 1 (fw::config::UI_TASK_CORE). */
 constexpr size_t READ_CHUNK = 128U;
 
 const hal::Devices* s_p_devices = nullptr;
@@ -688,7 +689,7 @@ common::Status bridge_start(const hal::Devices& devices)
     }
     s_p_devices = &devices;
     s_p_port = devices.p_debug_port;
-    status = osal::task_create(osal::TaskConfig{"gach_bridge", TASK_STACK_BYTES, TASK_PRIORITY, osal::CORE_ANY},
+    status = osal::task_create(osal::TaskConfig{"gach_bridge", TASK_STACK_BYTES, TASK_PRIORITY, TASK_CORE},
                                &bridge_task, nullptr);
     s_is_running = common::is_ok(status);
     return status;

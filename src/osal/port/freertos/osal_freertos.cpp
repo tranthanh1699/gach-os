@@ -101,7 +101,9 @@ common::Status task_create(const TaskConfig& config, TaskEntry entry, void* p_ar
     if ((entry == nullptr) || (config.stack_bytes == 0U)) {
         return common::Status::ERR_PARAM;
     }
-    const BaseType_t core = (config.core_id < 0) ? tskNO_AFFINITY : static_cast<BaseType_t>(config.core_id);
+    // Chip ít core hơn yêu cầu (VD single-core) -> không ghim, để cùng một cấu hình chạy được mọi chip.
+    const bool is_pinnable = (config.core_id >= 0) && (config.core_id < static_cast<int8_t>(portNUM_PROCESSORS));
+    const BaseType_t core = is_pinnable ? static_cast<BaseType_t>(config.core_id) : tskNO_AFFINITY;
     const BaseType_t ret = xTaskCreatePinnedToCore(entry, config.p_name, config.stack_bytes, p_arg,
                                                    static_cast<UBaseType_t>(config.priority), nullptr, core);
     return (ret == pdPASS) ? common::Status::OK : common::Status::ERR_NO_MEM;

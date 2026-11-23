@@ -162,7 +162,7 @@ common::Status start(const hal::Devices& devices)
     static osal::BinarySemaphore s_ready;
     s_start_ctx = StartContext{&devices, &s_ready, common::Status::ERR_STATE};
 
-    const osal::TaskConfig task_cfg{"ui", config::UI_TASK_STACK_BYTES, config::UI_TASK_PRIORITY, osal::CORE_ANY};
+    const osal::TaskConfig task_cfg{"ui", config::UI_TASK_STACK_BYTES, config::UI_TASK_PRIORITY, config::UI_TASK_CORE};
     common::Status status = osal::task_create(task_cfg, &ui_task, &s_start_ctx);
     if (common::is_ok(status)) {
         status = s_ready.take(config::UI_START_TIMEOUT_MS) ? s_start_ctx.status : common::Status::ERR_TIMEOUT;

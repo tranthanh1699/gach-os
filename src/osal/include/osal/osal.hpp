@@ -90,7 +90,7 @@ struct TaskConfig {
     const char* p_name;   /**< Tên task (debug). */
     uint32_t stack_bytes; /**< Kích thước stack tính bằng byte. */
     uint8_t priority;     /**< Độ ưu tiên (lớn hơn = ưu tiên cao hơn). */
-    int8_t core_id;       /**< Core ghim task, hoặc CORE_ANY. */
+    int8_t core_id;       /**< Core ghim task, hoặc CORE_ANY. Core không tồn tại trên chip -> như CORE_ANY. */
 };
 
 /**

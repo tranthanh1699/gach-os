@@ -23,6 +23,11 @@ constexpr int32_t UI_LARGE_SCREEN_SCALE_PCT = 150; /**< Tỷ lệ UI trên màn 
 
 constexpr uint32_t UI_TASK_STACK_BYTES = 12U * 1024U; /**< Đủ cho init + render SW của LVGL. */
 constexpr uint8_t UI_TASK_PRIORITY = 4U;
+/**
+ * Core chạy UI (LVGL + máy ảo Lua). Core 1: tránh ngắt/task esp_timer và task main (ghim core 0 trên ESP-IDF);
+ * việc nền (mạng/TLS, debug bridge) ghim sang core 0. Chip 1 core: osal tự bỏ ghim.
+ */
+constexpr int8_t UI_TASK_CORE = 1;
 constexpr uint32_t UI_START_TIMEOUT_MS = 5000U; /**< fw::start() chờ UI task khởi tạo xong. */
 constexpr uint32_t UI_PERIOD_MIN_MS = 5U;  /**< Chu kỳ tối thiểu vòng lặp UI. */
 constexpr uint32_t UI_PERIOD_MAX_MS = 30U; /**< Chu kỳ tối đa (đảm bảo indev được poll đều). */

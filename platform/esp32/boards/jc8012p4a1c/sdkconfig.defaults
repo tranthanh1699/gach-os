@@ -28,6 +28,10 @@ CONFIG_CACHE_L2_CACHE_LINE_128B=y
 CONFIG_LV_MEM_SIZE=131072
 # Nhịp refresh ~60 Hz (mặc định chung 20 ms = 50 Hz).
 CONFIG_LV_DEF_REFR_PERIOD=16
+# Vẽ song song (CONFIG_LV_OS_FREERTOS + CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT=2) đã đo (perf bench, vẽ lại toàn màn):
+# CHẬM HƠN 37-60 % (launcher 34->47 ms, weather 76->112 ms; đổi priority draw thread không khác). Dải buffer
+# 16 dòng chia khung thành nhiều draw task nhỏ: chi phí đồng bộ 2 thread + tranh cache lớn hơn lợi ích.
+# OS + 1 unit: ngang hoặc chậm hơn ~10 %. -> Giữ LV_OS_NONE, 1 draw unit.
 # PPA draw unit của LVGL 9.6 (CONFIG_LV_USE_PPA) đã đo: CHẬM HƠN 10-35 % (phép PPA chặn CPU + đồng bộ
 # cache mỗi lần tô, chỉ nhận ô chữ nhật không bo góc) -> không bật. PPA chỉ dùng để xoay khi flush.
 # UI co giãn 150%: theme chọn font gần nhất 14/20/28 x 1.5 -> 22/30/42 (font nằm trong flash).
@@ -63,3 +67,6 @@ CONFIG_FREERTOS_RUN_TIME_COUNTER_TYPE_U64=y
 
 # ---- Cho phép .bss trong PSRAM: runtime (128 slot app) chuyển qua platform/esp32/main/runtime_psram.lf ----
 CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
+
+# ---- Phân core: UI (LVGL + Lua) ghim core 1; mạng (lwip, HTTP/TLS), debug bridge, esp_timer ở core 0 ----
+CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU0=y

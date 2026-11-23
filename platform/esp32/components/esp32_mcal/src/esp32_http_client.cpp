@@ -17,6 +17,7 @@ namespace {
 constexpr const char* TAG = "http";
 constexpr uint32_t TASK_STACK_BYTES = 8U * 1024U; /**< Bắt tay TLS (mbedTLS) cần stack sâu. */
 constexpr UBaseType_t TASK_PRIORITY = 3U;
+constexpr BaseType_t TASK_CORE = 0; /**< Bắt tay TLS tốn CPU: giữ ở core 0, UI chạy core 1. */
 constexpr int TIMEOUT_MS = 15000;
 constexpr int RX_BUFFER_BYTES = 2048;
 constexpr int MAX_REDIRECTS = 3;
@@ -55,7 +56,8 @@ common::Status Esp32HttpClient::init(size_t body_capacity)
     m_capacity = body_capacity;
     m_p_start = xSemaphoreCreateBinaryStatic(&m_start_storage);
     // Stack ở RAM nội (mặc định của xTaskCreate): TLS/flash không được chạy trên stack PSRAM.
-    if (xTaskCreate(&Esp32HttpClient::task_entry, "http", TASK_STACK_BYTES, this, TASK_PRIORITY, nullptr) != pdPASS) {
+    if (xTaskCreatePinnedToCore(&Esp32HttpClient::task_entry, "http", TASK_STACK_BYTES, this, TASK_PRIORITY, nullptr,
+                                (TASK_CORE < portNUM_PROCESSORS) ? TASK_CORE : tskNO_AFFINITY) != pdPASS) {
         heap_caps_free(m_p_body);
         m_p_body = nullptr;
         return common::Status::ERR_NO_MEM;
