@@ -10,7 +10,10 @@ tools/gach devices                              # kiểm tra kết nối
 tools/gach install appstore/dist/*.gapp         # đẩy gói vào /install trên thẻ rồi cài ngay
 tools/gach apps                                 # app đã cài (id, version, tên)
 tools/gach uninstall org.gachos.g2048
-tools/gach logcat                               # log liên tục (Ctrl-C để thoát)
+tools/gach logcat                               # như adb: log từ lúc boot rồi theo dõi tiếp (Ctrl-C để thoát)
+tools/gach logcat -f                            # chỉ log mới
+tools/gach dmesg                                # 32 KiB log gần nhất, kể cả lúc khởi động (xem docs/logging.md)
+tools/gach loglevel wifi d                      # đổi mức log lúc chạy (toàn cục: loglevel d; xem: loglevel)
 tools/gach shell                                # shell tương tác, gõ help
 tools/gach push notes.txt apps/foo/notes.txt    # chép lên thẻ (đường dẫn tương đối gốc thẻ)
 tools/gach pull apps/foo/data.ini -             # lấy file về (- = in ra stdout)

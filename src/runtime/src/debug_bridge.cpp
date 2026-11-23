@@ -13,7 +13,9 @@
 #include <cstring>
 
 #include "common/string_utils.hpp"
+#include "common/log.hpp"
 #include "frame_codec.hpp"
+#include "log_history.hpp"
 #include "framework/system.hpp"
 #include "framework/ui_lock.hpp"
 #include "hal_api/board.hpp"
@@ -170,6 +172,7 @@ void cmd_help(uint8_t id)
     send_text(id, "info | mem | apps | ls [dir] | mkdir <dir> | rm <path>");
     send_text(id, "push <path> <size> | pull <path> | install | uninstall <id> | reboot");
     send_text(id, "launch <app_id> | back | home | perf [reset|bench] | uidiag");
+    send_text(id, "dmesg | loglevel [tag] [n|e|w|i|d|v]");
     send_resp(id, true, nullptr);
 }
 
@@ -436,6 +439,74 @@ void cmd_uninstall(uint8_t id, const char* p_id)
     send_resp(id, common::is_ok(status), common::is_ok(status) ? "removed" : last_error());
 }
 
+// ---- Log ----
+/** @brief In lại lịch sử log (từng dòng một khung TEXT). */
+void cmd_dmesg(uint8_t id)
+{
+    constexpr size_t CHUNK = MAX_DATA; // >= dòng log dài nhất (256 B kể cả '\n'): mỗi dòng đi trọn một khung.
+    char chunk[CHUNK + 1U];
+    uint32_t pos = 0U;
+    const uint32_t end = log_history::total(); // Log phát sinh trong lúc gửi không làm vòng lặp kéo dài mãi.
+    while (pos < end) {
+        const uint32_t chunk_pos = pos;
+        const size_t count = log_history::read(pos, chunk, CHUNK);
+        if (count == 0U) {
+            break;
+        }
+        size_t start = 0U;
+        for (size_t index = 0U; index < count; ++index) {
+            if (chunk[index] == '\n') {
+                chunk[index] = '\0';
+                send_text(id, &chunk[start]);
+                start = index + 1U;
+            }
+        }
+        const bool is_tail = start < count;
+        if (is_tail && (start == 0U) && (count == CHUNK)) {
+            chunk[count] = '\0';
+            send_text(id, chunk); // Dòng dài hơn một khối: gửi từng khúc.
+        } else if (is_tail && (pos < end)) {
+            pos = chunk_pos + static_cast<uint32_t>(start); // Đọc lại dòng dở ở lượt sau cho trọn.
+        } else if (is_tail) {
+            chunk[count] = '\0';
+            send_text(id, &chunk[start]); // Dòng cuối chưa có '\n'.
+        } else {
+            // Khối kết thúc đúng ở '\n'.
+        }
+    }
+    send_resp(id, true, nullptr);
+}
+
+/** @brief loglevel: xem / đổi mức log toàn cục hoặc theo tag. */
+void cmd_loglevel(uint8_t id, const char* p_arg1, const char* p_arg2)
+{
+    namespace glog = common::log;
+    glog::Level level = glog::Level::INFO;
+    if (p_arg1 != nullptr) {
+        const bool is_global = (p_arg2 == nullptr);
+        const char* const p_level = is_global ? p_arg1 : p_arg2;
+        if (!glog::parse_level(p_level, level)) {
+            send_resp(id, false, "level must be n, e, w, i, d or v");
+            return;
+        }
+        if (is_global) {
+            glog::set_level(level);
+        } else if (!glog::set_level(p_arg1, level)) {
+            send_resp(id, false, "too many tag overrides");
+            return;
+        }
+    }
+    char text[TEXT_BUF_LEN];
+    int used = std::snprintf(text, sizeof(text), "global=%c", glog::level_char(glog::global_level()));
+    for (size_t index = 0U; (index < glog::tag_level_count()) && (used > 0) && (static_cast<size_t>(used) < sizeof(text));
+         ++index) {
+        const glog::TagLevel& entry = glog::tag_level_at(index);
+        used += std::snprintf(&text[used], sizeof(text) - static_cast<size_t>(used), " %s=%c", entry.tag,
+                              glog::level_char(entry.level));
+    }
+    send_resp(id, true, text);
+}
+
 // ---- Điều khiển app: chạy trên task UI ----
 // Mở/đóng app chạy on_create/on_resume/on_back của app (máy ảo Lua, dựng UI, layout LVGL): sâu hơn nhiều so với
 // stack 6 KiB của bridge (đã gặp tràn stack khi launch). Bridge chỉ hẹn một lv_timer chạy một lần trên task UI
@@ -610,6 +681,10 @@ void on_command(const Frame& frame)
         cmd_push(id, p_arg1, p_arg2);
     } else if (std::strcmp(p_cmd, "pull") == 0) {
         cmd_pull(id, p_arg1);
+    } else if (std::strcmp(p_cmd, "dmesg") == 0) {
+        cmd_dmesg(id);
+    } else if (std::strcmp(p_cmd, "loglevel") == 0) {
+        cmd_loglevel(id, p_arg1, p_arg2);
     } else if (std::strcmp(p_cmd, "install") == 0) {
         cmd_install(id);
     } else if (std::strcmp(p_cmd, "uninstall") == 0) {
@@ -742,6 +817,11 @@ common::Status bridge_start(const hal::Devices& devices)
                                &bridge_task, nullptr);
     s_is_running = common::is_ok(status);
     return status;
+}
+
+void log_history_append(const char* p_text, size_t len)
+{
+    log_history::append(p_text, len);
 }
 
 bool bridge_log(const char* p_text, size_t len)

@@ -49,6 +49,7 @@ appstore/          Kho app cài thêm (Lua): apps/<tên>, template/, gapp.sh –
 - Không magic number (đặt `constexpr` có tên). Hàm ngắn, early-return. Doxygen cho mọi API public.
 - LVGL chỉ được gọi từ UI task. App hủy `lv_timer`/object top-layer ở `on_pause`/`on_destroy`.
 - Build với `-Wall -Wextra -Werror -Wshadow -Wnon-virtual-dtor`: 0 warning.
+- Log: `LOGE/W/I/D/V(tag, ...)` từ `common/log.hpp` ở mọi tầng, không `printf` – [`docs/logging.md`](docs/logging.md).
 
 ## 5. Git
 - Conventional Commits: `<type>(<scope>): <mô tả>` — chi tiết [`.agent/rules/commit_standards.md`](.agent/rules/commit_standards.md). VD: `feat(launcher): ...`, `fix(jc8012p4a1c): ...`, `build(esp32): ...`.

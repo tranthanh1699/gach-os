@@ -59,6 +59,7 @@ namespace fw {
 2. Kiểu số rõ kích thước `<cstdint>`; `size_t` cho kích thước/chỉ số.
 3. Ép kiểu dùng `static_cast` / `reinterpret_cast` (không C-cast). Ngoại lệ duy nhất: `(void)expr;` để bỏ giá trị trả về có chủ đích.
 4. Buffer luôn đi kèm độ dài; dùng `snprintf`, cấm `sprintf/strcpy/strcat`.
+4b. Log trong `src/` chỉ dùng `LOGE/W/I/D/V(tag, ...)` của `common/log.hpp` (không `printf`); xem `docs/logging.md`.
 5. Buffer DMA: RAM nội, căn lề ≥ 4 byte (ESP32), 32 byte nếu chip có D-Cache.
 6. Biến chia sẻ ISR ↔ task: `volatile`/atomic + critical section qua OSAL.
 

@@ -5,7 +5,9 @@
   tools/gach apps                     App đã cài
   tools/gach install app.gapp [...]   Đẩy gói vào /install rồi cài ngay (không cần rút thẻ SD)
   tools/gach uninstall <id>           Gỡ app
-  tools/gach logcat                   Xem log liên tục (Ctrl-C để thoát)
+  tools/gach logcat [-f]              Log từ lúc boot rồi theo dõi tiếp như adb (-f: chỉ log mới; Ctrl-C để thoát)
+  tools/gach dmesg                    In lại lịch sử log (32 KiB gần nhất, kể cả log lúc khởi động)
+  tools/gach loglevel [tag] [e|w|i|d|v|n]   Xem / đổi mức log toàn cục hoặc theo tag
   tools/gach shell                    Shell tương tác (gõ help)
   tools/gach push <local> <remote>    Chép file lên thẻ SD
   tools/gach pull <remote> [local]    Lấy file từ thẻ SD về
@@ -286,8 +288,32 @@ def do_install(link: Link, files: list[str]) -> int:
     return run_simple(link, "install")
 
 
-def do_logcat(link: Link) -> int:
-    link.log_sink = lambda text: (sys.stdout.write(text), sys.stdout.flush())
+DMESG_TIMEOUT_S = 60.0  # 32 KiB lịch sử qua 115200 baud ~ 3-4 s; dư cho UART bận.
+
+
+def merge_live(history: list[str], live: list[str]) -> list[str]:
+    """Bỏ các dòng log trực tiếp đã có trong lịch sử (log phát sinh giữa lúc kết nối và lúc chụp lịch sử
+    được gửi cả hai đường). Mỗi dòng có timestamp nên so khớp nguyên văn là đủ."""
+    seen = set(line.rstrip("\r\n") for line in history)
+    return [line for line in live if line.rstrip("\r\n") not in seen]
+
+
+def do_logcat(link: Link, follow_only: bool = False) -> int:
+    """Như `adb logcat`: in lịch sử (từ lúc boot, tối đa 32 KiB) rồi theo dõi log mới; follow_only = chỉ log mới."""
+    write = lambda text: (sys.stdout.write(text), sys.stdout.flush())
+    if not follow_only:
+        live: list[str] = []
+        link.log_sink = live.append  # Gom log trực tiếp trong lúc tải lịch sử, in sau cho đúng thứ tự.
+        history: list[str] = []
+        ok, _ = link.command("dmesg", on_text=lambda line: (history.append(line), print(line, flush=True)),
+                             timeout=DMESG_TIMEOUT_S)
+        if not ok and not history:
+            print("-- (firmware has no log history: showing new logs only) --", file=sys.stderr)
+        link.log_sink = write
+        for chunk in merge_live(history, "".join(live).splitlines(keepends=True)):
+            write(chunk)
+    else:
+        link.log_sink = write
     print("-- logcat (Ctrl-C to quit) --", file=sys.stderr)
     try:
         while True:
@@ -298,7 +324,7 @@ def do_logcat(link: Link) -> int:
 
 def do_shell(link: Link) -> int:
     print("gach shell – device commands (help) + local: install <file.gapp>, push <local> <remote>, "
-          "pull <remote> [local], logcat, exit", file=sys.stderr)
+          "pull <remote> [local], logcat [-f], exit", file=sys.stderr)
     while True:
         try:
             line = input("gach> ").strip()
@@ -318,7 +344,7 @@ def do_shell(link: Link) -> int:
         elif parts[0] == "pull" and len(parts) in (2, 3):
             do_pull(link, parts[1], parts[2] if len(parts) == 3 else None)
         elif parts[0] == "logcat":
-            do_logcat(link)
+            do_logcat(link, follow_only=("-f" in parts[1:]))
             link.log_sink = None
         else:
             run_simple(link, line)
@@ -336,12 +362,26 @@ def do_pull(link: Link, remote: str, local: str | None) -> int:
     return 0 if ok else 1
 
 
+LOG_LEVELS = {"n", "none", "e", "error", "w", "warn", "i", "info", "d", "debug", "v", "verbose"}
+
+
+def loglevel_command(args: list[str]) -> str | None:
+    """Dựng lệnh loglevel cho board; None nếu tham số sai (mức đứng cuối, tag tùy chọn đứng trước)."""
+    if len(args) > 2 or (args and args[-1].lower() not in LOG_LEVELS):
+        return None
+    return " ".join(["loglevel", *args])
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(prog="gach", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-p", "--port", default=os.environ.get("GACH_PORT", "/dev/ttyUSB0"))
     sub = parser.add_subparsers(dest="cmd", required=True)
-    for name in ("info", "mem", "apps", "reboot", "logcat", "shell", "devices", "home", "back"):
+    for name in ("info", "mem", "apps", "reboot", "shell", "devices", "home", "back", "dmesg"):
         sub.add_parser(name)
+    sub.add_parser("logcat", help="lịch sử log rồi theo dõi tiếp (-f: chỉ log mới)").add_argument(
+        "-f", "--follow", action="store_true", help="bỏ qua lịch sử, chỉ in log mới")
+    loglevel = sub.add_parser("loglevel", help="xem / đổi mức log: loglevel [tag] [n|e|w|i|d|v]")
+    loglevel.add_argument("args", nargs="*")
     sub.add_parser("launch").add_argument("app")
     sub.add_parser("perf").add_argument("reset", nargs="?", choices=["reset", "bench"])
     sub.add_parser("ls").add_argument("dir", nargs="?", default="")
@@ -362,8 +402,14 @@ def main() -> int:
         if args.cmd == "devices":
             print(f"{args.port}\t{link.connect()}")
             return 0
-        if args.cmd in ("info", "mem", "apps", "reboot", "home", "back"):
+        if args.cmd in ("info", "mem", "apps", "reboot", "home", "back", "dmesg"):
             return run_simple(link, args.cmd)
+        if args.cmd == "loglevel":
+            line = loglevel_command(args.args)
+            if line is None:
+                print("usage: gach loglevel [tag] [n|e|w|i|d|v]", file=sys.stderr)
+                return 2
+            return run_simple(link, line)
         if args.cmd == "launch":
             return run_simple(link, f"launch {args.app}")
         if args.cmd == "perf":
@@ -383,7 +429,7 @@ def main() -> int:
         if args.cmd == "pull":
             return do_pull(link, args.remote, args.local)
         if args.cmd == "logcat":
-            return do_logcat(link)
+            return do_logcat(link, follow_only=args.follow)
         if args.cmd == "shell":
             return do_shell(link)
     finally:

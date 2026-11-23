@@ -73,6 +73,12 @@ common::Status bridge_start(const hal::Devices& devices);
  */
 bool bridge_log(const char* p_text, size_t len);
 
+/**
+ * @brief Ghi một đoạn log vào lịch sử (`gach dmesg`), kể cả khi chưa có máy tính kết nối.
+ * @note  Platform gọi cho MỌI dòng log (gach log + log của SDK chip), từ mọi task (không gọi trong ISR).
+ */
+void log_history_append(const char* p_text, size_t len);
+
 } // namespace runtime
 
 #endif /* RUNTIME_RUNTIME_HPP */

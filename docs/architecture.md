@@ -142,7 +142,13 @@ Launcher ──launch──► ScriptApp (fw::App, exclusive) ──► ScriptHo
 2. Thêm instance tĩnh vào mảng `s_apps` trong `builtin_apps.cpp`, thêm `.cpp` vào `src/apps/CMakeLists.txt`.
 3. `./build.sh` (layer check tự chạy).
 
-## 7. Port sang chip / board mới
+## 7. Log
+
+Mọi tầng ghi log bằng `LOGE/LOGW/LOGI/LOGD/LOGV(tag, ...)` của `common/log.hpp` (header-only, không phụ thuộc
+RTOS/SDK); `platform/main` cắm backend định dạng + đường ra. Log của OS và của SDK chip đi chung một đường: lịch sử
+32 KiB (`gach dmesg`) + debug bridge / UART. Chi tiết: [logging.md](logging.md).
+
+## 8. Port sang chip / board mới
 
 | Việc | Chạm vào | Không chạm |
 | :--- | :--- | :--- |

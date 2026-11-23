@@ -3,6 +3,7 @@
 idf_component_register(SRCS "src/arena_allocator.cpp"
                             "src/debug_bridge.cpp"
                             "src/fs_utils.cpp"
+                            "src/log_history.cpp"
                             "src/manifest.cpp"
                             "src/package_archive.cpp"
                             "src/runtime.cpp"

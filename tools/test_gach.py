@@ -36,6 +36,18 @@ class CodecTest(unittest.TestCase):
         frame[3] ^= 0x01
         self.assertIsNone(gach.decode_frame(bytes(frame[1:-1])))
 
+    def test_loglevel_command(self):
+        self.assertEqual(gach.loglevel_command([]), "loglevel")
+        self.assertEqual(gach.loglevel_command(["d"]), "loglevel d")
+        self.assertEqual(gach.loglevel_command(["wifi", "verbose"]), "loglevel wifi verbose")
+        self.assertIsNone(gach.loglevel_command(["wifi"]))
+        self.assertIsNone(gach.loglevel_command(["a", "b", "c"]))
+
+    def test_merge_live_drops_lines_already_in_history(self):
+        history = ["I (100) app: open launcher", "I (200) wifi: connected"]
+        live = ["I (200) wifi: connected\n", "I (300) time: NTP sync started\n"]
+        self.assertEqual(gach.merge_live(history, live), ["I (300) time: NTP sync started\n"])
+
     def test_raw_log_is_not_a_frame(self):
         self.assertIsNone(gach.decode_frame(b"I (123) main: OS started\r\n"))
 

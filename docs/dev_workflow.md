@@ -78,7 +78,8 @@ tools/gach apps                                  # app đã cài: id  version  t
 tools/gach install appstore/dist/org.gachos.g2048.gapp   # cài / nâng cấp app (giữ dữ liệu app)
 tools/gach install appstore/dist/*.gapp          # cài nhiều gói một lần
 tools/gach uninstall org.gachos.g2048            # gỡ app (xóa cả dữ liệu)
-tools/gach logcat                                # log liên tục, Ctrl-C để thoát
+tools/gach logcat                                # như adb: in log từ lúc boot rồi theo dõi tiếp, Ctrl-C để thoát
+tools/gach logcat -f                             # chỉ log mới (bỏ qua lịch sử)
 tools/gach ls                                    # thư mục gốc thẻ SD
 tools/gach ls apps/org.gachos.g2048
 tools/gach pull apps/org.gachos.g2048/data.ini - # in file ra màn hình (- = stdout)
@@ -127,7 +128,9 @@ Trong shell, `install <file>`, `push <local> <remote>`, `pull <remote> [local]` 
 | `apps` | Danh sách app cài thêm |
 | `install <file.gapp>...` | Đẩy vào `/install` trên thẻ rồi cài. App đang có cùng `id` được nâng cấp, dữ liệu giữ nguyên |
 | `uninstall <id>` | Gỡ app và dữ liệu của nó |
-| `logcat` | Log hệ thống + `print()` của app Lua |
+| `logcat [-f]` | Như `adb logcat`: in lịch sử (từ lúc boot, tối đa 32 KiB) rồi theo dõi log mới; `-f` = chỉ log mới. Gồm log hệ thống + `print()` / `gach.log` của app Lua |
+| `dmesg` | In lại 32 KiB log gần nhất, kể cả lúc khởi động / lúc chưa cắm máy |
+| `loglevel [tag] [n\|e\|w\|i\|d\|v]` | Xem / đổi mức log toàn cục hoặc theo tag (VD `loglevel org.gachos.weather d`) |
 | `shell` | Shell tương tác |
 | `ls [dir]` / `mkdir <dir>` / `rm <path>` | Thao tác thư mục / file trên thẻ |
 | `push <local> <remote>` / `pull <remote> [local\|-]` | Chép file lên / về |
@@ -141,6 +144,8 @@ Trong shell, `install <file>`, `push <local> <remote>`, `pull <remote> [local]` 
 - `gach` đang kết nối: log được đóng khung để không lẫn với dữ liệu lệnh/file. `gach logcat` hiển thị đúng.
 - Thoát `gach` quá 5 giây: board tự quay về log dạng chữ.
 - Log lúc khởi động (trước khi OS chạy) luôn là chữ thô; `logcat` vẫn hiển thị.
+- Mọi log (kể cả khi không cắm máy) được giữ trong bộ đệm 32 KiB: `gach dmesg` để xem lại. Chi tiết API và mức log:
+  [logging.md](logging.md).
 
 ## 5. Vòng phát triển app Lua
 
