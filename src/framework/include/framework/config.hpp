@@ -16,8 +16,11 @@ constexpr size_t MAX_APP_STACK = 4U;  /**< Độ sâu back-stack (bao gồm home
 
 constexpr size_t DRAW_BUF_BYTES = 24U * 1024U; /**< Buffer render partial của LVGL (độc lập độ phân giải). */
 
-constexpr int32_t STATUS_BAR_HEIGHT = 22; /**< Thanh trạng thái phía trên (px). */
-constexpr int32_t NAV_BAR_HEIGHT = 34;    /**< Thanh điều hướng Back/Home phía dưới (px). */
+constexpr int32_t STATUS_BAR_HEIGHT = 22; /**< Thanh trạng thái phía trên (dp, xem theme::px). */
+constexpr int32_t NAV_BAR_HEIGHT = 34;    /**< Thanh điều hướng Back/Home phía dưới (dp). */
+
+constexpr int32_t UI_LARGE_SCREEN_MIN_SIDE = 600;  /**< Cạnh ngắn (px) từ đó coi là màn lớn / máy tính bảng. */
+constexpr int32_t UI_LARGE_SCREEN_SCALE_PCT = 150; /**< Tỷ lệ UI trên màn lớn (%): dễ đọc khi cầm xa hơn. */
 
 constexpr uint32_t UI_TASK_STACK_BYTES = 12U * 1024U; /**< Đủ cho init + render SW của LVGL. */
 constexpr uint8_t UI_TASK_PRIORITY = 4U;

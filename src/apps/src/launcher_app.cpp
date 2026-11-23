@@ -12,6 +12,7 @@ namespace apps {
 namespace {
 
 constexpr fw::AppInfo INFO{"launcher", "Home", LV_SYMBOL_HOME, 0x2F81F7U, false};
+// Kích thước theo dp (theme::px đổi sang pixel thật).
 constexpr int32_t TILE_WIDTH = 72;
 constexpr int32_t ICON_SIZE = 52;
 constexpr int32_t ICON_RADIUS = 14;
@@ -20,6 +21,8 @@ constexpr int32_t TILE_ROW_GAP = 4;
 constexpr int32_t DOT_SIZE = 6;
 constexpr int32_t DOT_GAP = 6;
 constexpr int32_t INDICATOR_HEIGHT = 12;
+constexpr size_t MAX_COLUMNS = 8U; /**< Màn rất rộng: giữ khoảng thở giữa các icon thay vì nhồi thêm cột. */
+constexpr size_t MAX_ROWS = 4U;
 constexpr uint32_t DOT_ACTIVE = 0xE6EDF3U;
 constexpr uint32_t DOT_INACTIVE = 0x484F58U;
 constexpr uint32_t REGISTRY_CHECK_MS = 1000U; // App có thể được cài/gỡ khi launcher đang hiển thị.
@@ -38,20 +41,20 @@ void init_styles()
         return;
     }
     lv_style_init(&s_style_tile);
-    lv_style_set_width(&s_style_tile, TILE_WIDTH);
+    lv_style_set_width(&s_style_tile, fw::theme::px(TILE_WIDTH));
     lv_style_set_height(&s_style_tile, LV_SIZE_CONTENT);
     lv_style_set_layout(&s_style_tile, LV_LAYOUT_FLEX);
     lv_style_set_flex_flow(&s_style_tile, LV_FLEX_FLOW_COLUMN);
     lv_style_set_flex_cross_place(&s_style_tile, LV_FLEX_ALIGN_CENTER);
-    lv_style_set_pad_row(&s_style_tile, TILE_ROW_GAP);
+    lv_style_set_pad_row(&s_style_tile, fw::theme::px(TILE_ROW_GAP));
 
     lv_style_init(&s_style_tile_pressed);
     lv_style_set_opa(&s_style_tile_pressed, LV_OPA_60);
 
     lv_style_init(&s_style_icon);
-    lv_style_set_width(&s_style_icon, ICON_SIZE);
-    lv_style_set_height(&s_style_icon, ICON_SIZE);
-    lv_style_set_radius(&s_style_icon, ICON_RADIUS);
+    lv_style_set_width(&s_style_icon, fw::theme::px(ICON_SIZE));
+    lv_style_set_height(&s_style_icon, fw::theme::px(ICON_SIZE));
+    lv_style_set_radius(&s_style_icon, fw::theme::px(ICON_RADIUS));
     lv_style_set_bg_opa(&s_style_icon, LV_OPA_COVER);
 
     lv_style_init(&s_style_symbol);
@@ -60,7 +63,7 @@ void init_styles()
     lv_style_set_align(&s_style_symbol, LV_ALIGN_CENTER);
 
     lv_style_init(&s_style_name);
-    lv_style_set_width(&s_style_name, TILE_WIDTH);
+    lv_style_set_width(&s_style_name, fw::theme::px(TILE_WIDTH));
     lv_style_set_text_align(&s_style_name, LV_TEXT_ALIGN_CENTER);
     lv_style_set_text_color(&s_style_name, lv_color_hex(fw::theme::COLOR_TEXT));
     s_styles_ready = true;
@@ -75,7 +78,8 @@ size_t page_of(lv_obj_t* p_page)
 
 LauncherApp::LauncherApp()
     : fw::App(INFO), m_p_tileview(nullptr), m_p_indicator(nullptr), m_pages{}, m_visible{}, m_visible_count(0U),
-      m_page_count(0U), m_active_page(0U), m_p_timer(nullptr), m_built_generation(0U), m_is_paused(false)
+      m_tiles_per_page(MIN_TILES_PER_PAGE), m_page_count(0U), m_active_page(0U), m_p_timer(nullptr),
+      m_built_generation(0U), m_is_paused(false)
 {
 }
 
@@ -96,10 +100,10 @@ void LauncherApp::on_create(lv_obj_t* p_root)
 
     m_p_indicator = lv_obj_create(p_root);
     lv_obj_remove_style_all(m_p_indicator);
-    lv_obj_set_size(m_p_indicator, LV_PCT(100), INDICATOR_HEIGHT);
+    lv_obj_set_size(m_p_indicator, LV_PCT(100), fw::theme::px(INDICATOR_HEIGHT));
     lv_obj_set_flex_flow(m_p_indicator, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(m_p_indicator, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(m_p_indicator, DOT_GAP, 0);
+    lv_obj_set_style_pad_column(m_p_indicator, fw::theme::px(DOT_GAP), 0);
     lv_obj_remove_flag(m_p_indicator, LV_OBJ_FLAG_CLICKABLE);
 
     build_pages();
@@ -159,13 +163,14 @@ void LauncherApp::build_pages()
     m_built_generation = apps.registry_generation();
 
     lv_obj_clean(m_p_tileview);
-    m_page_count = (m_visible_count == 0U) ? 1U : ((m_visible_count + TILES_PER_PAGE - 1U) / TILES_PER_PAGE);
+    m_tiles_per_page = compute_tiles_per_page();
+    m_page_count = (m_visible_count == 0U) ? 1U : ((m_visible_count + m_tiles_per_page - 1U) / m_tiles_per_page);
     for (size_t page = 0U; page < m_page_count; ++page) {
         lv_obj_t* const p_page = lv_tileview_add_tile(m_p_tileview, static_cast<uint8_t>(page), 0U, LV_DIR_HOR);
         lv_obj_set_user_data(p_page, reinterpret_cast<void*>(static_cast<uintptr_t>(page)));
-        lv_obj_set_style_pad_all(p_page, GRID_GAP, 0);
-        lv_obj_set_style_pad_row(p_page, GRID_GAP, 0);
-        lv_obj_set_style_pad_column(p_page, GRID_GAP, 0);
+        lv_obj_set_style_pad_all(p_page, fw::theme::px(GRID_GAP), 0);
+        lv_obj_set_style_pad_row(p_page, fw::theme::px(GRID_GAP), 0);
+        lv_obj_set_style_pad_column(p_page, fw::theme::px(GRID_GAP), 0);
         lv_obj_set_flex_flow(p_page, LV_FLEX_FLOW_ROW_WRAP);
         lv_obj_set_flex_align(p_page, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
         lv_obj_remove_flag(p_page, LV_OBJ_FLAG_SCROLLABLE); // Chỉ tileview cuộn (ngang).
@@ -177,7 +182,7 @@ void LauncherApp::build_pages()
     for (size_t page = 0U; (m_page_count > 1U) && (page < m_page_count); ++page) {
         lv_obj_t* const p_dot = lv_obj_create(m_p_indicator);
         lv_obj_remove_style_all(p_dot);
-        lv_obj_set_size(p_dot, DOT_SIZE, DOT_SIZE);
+        lv_obj_set_size(p_dot, fw::theme::px(DOT_SIZE), fw::theme::px(DOT_SIZE));
         lv_obj_set_style_radius(p_dot, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(p_dot, LV_OPA_COVER, 0);
     }
@@ -185,6 +190,24 @@ void LauncherApp::build_pages()
     const size_t page = (m_active_page < m_page_count) ? m_active_page : (m_page_count - 1U);
     lv_tileview_set_tile_by_index(m_p_tileview, static_cast<uint32_t>(page), 0U, LV_ANIM_OFF);
     show_page(page);
+}
+
+size_t LauncherApp::compute_tiles_per_page() const
+{
+    // Diện tích lưới = tileview (đã layout) trừ lề trang; mỗi ô = icon + khoảng + 1 dòng tên.
+    lv_obj_update_layout(m_p_tileview);
+    const int32_t gap = fw::theme::px(GRID_GAP);
+    const int32_t area_w = lv_obj_get_content_width(m_p_tileview) - gap;
+    const int32_t area_h = lv_obj_get_content_height(m_p_tileview) - gap;
+    const int32_t tile_w = fw::theme::px(TILE_WIDTH) + gap;
+    const int32_t tile_h = fw::theme::px(ICON_SIZE) + fw::theme::px(TILE_ROW_GAP) +
+                           lv_font_get_line_height(fw::theme::font_small()) + gap;
+    size_t cols = (area_w > 0) ? static_cast<size_t>(area_w / tile_w) : 0U;
+    size_t rows = (area_h > 0) ? static_cast<size_t>(area_h / tile_h) : 0U;
+    cols = (cols > MAX_COLUMNS) ? MAX_COLUMNS : cols;
+    rows = (rows > MAX_ROWS) ? MAX_ROWS : rows;
+    const size_t tiles = cols * rows;
+    return (tiles < MIN_TILES_PER_PAGE) ? MIN_TILES_PER_PAGE : tiles;
 }
 
 void LauncherApp::show_page(size_t page)
@@ -207,8 +230,8 @@ void LauncherApp::populate(size_t page)
     if (lv_obj_get_child_count(p_page) > 0U) {
         return; // Đã dựng.
     }
-    const size_t first = page * TILES_PER_PAGE;
-    for (size_t index = first; (index < m_visible_count) && (index < (first + TILES_PER_PAGE)); ++index) {
+    const size_t first = page * m_tiles_per_page;
+    for (size_t index = first; (index < m_visible_count) && (index < (first + m_tiles_per_page)); ++index) {
         create_tile(p_page, *m_visible[index]);
     }
 }

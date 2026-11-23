@@ -35,13 +35,13 @@ void AppStoreApp::on_create(lv_obj_t* p_root)
     lv_obj_set_size(p_header, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(p_header, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(p_header, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(p_header, fw::theme::PAD_NORMAL, 0);
+    lv_obj_set_style_pad_column(p_header, fw::theme::pad(), 0);
 
     m_p_status = ui::label(p_header, "", fw::theme::font_small(), fw::theme::COLOR_TEXT_MUTED);
     lv_obj_set_flex_grow(m_p_status, 1);
     lv_label_set_long_mode(m_p_status, LV_LABEL_LONG_DOT);
     m_p_install_btn = ui::button(p_header, LV_SYMBOL_SD_CARD, &AppStoreApp::on_install_clicked, this);
-    lv_obj_set_size(m_p_install_btn, INSTALL_BUTTON_SIZE, INSTALL_BUTTON_SIZE);
+    lv_obj_set_size(m_p_install_btn, fw::theme::px(INSTALL_BUTTON_SIZE), fw::theme::px(INSTALL_BUTTON_SIZE));
 
     m_p_list = lv_list_create(p_root);
     lv_obj_set_width(m_p_list, LV_PCT(100));

@@ -12,8 +12,7 @@ namespace apps {
 namespace {
 
 constexpr fw::AppInfo INFO{"touch", "Touch", LV_SYMBOL_EDIT, 0xDB6D28U, true};
-constexpr int32_t DOT_SIZE = 8;
-constexpr int32_t DOT_HALF = DOT_SIZE / 2;
+constexpr int32_t DOT_SIZE = 8; // dp
 
 } // namespace
 
@@ -32,7 +31,7 @@ void TouchTestApp::on_create(lv_obj_t* p_root)
     for (lv_obj_t*& p_dot : m_p_dots) {
         p_dot = lv_obj_create(m_p_canvas);
         lv_obj_remove_style_all(p_dot);
-        lv_obj_set_size(p_dot, DOT_SIZE, DOT_SIZE);
+        lv_obj_set_size(p_dot, fw::theme::px(DOT_SIZE), fw::theme::px(DOT_SIZE));
         lv_obj_set_style_radius(p_dot, LV_RADIUS_CIRCLE, 0);
         lv_obj_set_style_bg_opa(p_dot, LV_OPA_COVER, 0);
         lv_obj_set_style_bg_color(p_dot, lv_color_hex(fw::theme::COLOR_SECONDARY), 0);
@@ -41,10 +40,10 @@ void TouchTestApp::on_create(lv_obj_t* p_root)
     }
 
     m_p_coord = ui::label(p_root, "Touch anywhere", fw::theme::font_small(), fw::theme::COLOR_TEXT_MUTED);
-    lv_obj_align(m_p_coord, LV_ALIGN_TOP_LEFT, fw::theme::PAD_NORMAL, fw::theme::PAD_NORMAL);
+    lv_obj_align(m_p_coord, LV_ALIGN_TOP_LEFT, fw::theme::pad(), fw::theme::pad());
 
     lv_obj_t* const p_clear = ui::button(p_root, LV_SYMBOL_TRASH, &TouchTestApp::on_clear_clicked, this);
-    lv_obj_align(p_clear, LV_ALIGN_TOP_RIGHT, -fw::theme::PAD_NORMAL, fw::theme::PAD_NORMAL);
+    lv_obj_align(p_clear, LV_ALIGN_TOP_RIGHT, -fw::theme::pad(), fw::theme::pad());
 }
 
 void TouchTestApp::on_destroy()
@@ -82,7 +81,8 @@ void TouchTestApp::on_pressing(lv_event_t* p_event)
     const int32_t local_y = point.y - canvas_area.y1;
 
     lv_obj_t* const p_dot = p_self->m_p_dots[p_self->m_next_dot];
-    lv_obj_set_pos(p_dot, local_x - DOT_HALF, local_y - DOT_HALF);
+    const int32_t half = fw::theme::px(DOT_SIZE) / 2;
+    lv_obj_set_pos(p_dot, local_x - half, local_y - half);
     lv_obj_remove_flag(p_dot, LV_OBJ_FLAG_HIDDEN);
     p_self->m_next_dot = (p_self->m_next_dot + 1U) % DOT_COUNT;
 

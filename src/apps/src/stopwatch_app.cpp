@@ -42,10 +42,10 @@ void StopwatchApp::on_create(lv_obj_t* p_root)
     lv_obj_set_flex_align(p_row, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
     lv_obj_t* const p_start = ui::button(p_row, "", &StopwatchApp::on_start_stop, this);
-    lv_obj_set_width(p_start, BUTTON_WIDTH);
+    lv_obj_set_width(p_start, fw::theme::px(BUTTON_WIDTH));
     m_p_start_label = lv_obj_get_child(p_start, 0);
     lv_obj_t* const p_reset = ui::button(p_row, LV_SYMBOL_REFRESH " Reset", &StopwatchApp::on_reset, this);
-    lv_obj_set_width(p_reset, BUTTON_WIDTH);
+    lv_obj_set_width(p_reset, fw::theme::px(BUTTON_WIDTH));
 }
 
 void StopwatchApp::on_resume()

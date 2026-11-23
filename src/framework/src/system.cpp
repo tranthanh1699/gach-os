@@ -71,6 +71,9 @@ common::Status init_ui(const hal::Devices& devices)
     }
 
     lv_display_t* const p_disp = s_port.display();
+    // Tỷ lệ UI theo màn hình; DPI ảo để widget mặc định của LVGL (lề, bo góc...) co giãn cùng tỷ lệ.
+    theme::init(static_cast<int32_t>(devices.p_display->width()), static_cast<int32_t>(devices.p_display->height()));
+    lv_display_set_dpi(p_disp, theme::px(LV_DPI_DEF));
     lv_theme_t* const p_theme = lv_theme_default_init(p_disp, lv_color_hex(theme::COLOR_PRIMARY),
                                                       lv_color_hex(theme::COLOR_SECONDARY), true, theme::font_small());
     lv_display_set_theme(p_disp, p_theme);

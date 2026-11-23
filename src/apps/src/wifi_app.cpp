@@ -25,7 +25,7 @@ constexpr int32_t DIALOG_PAD = 2;
 lv_obj_t* icon_button(lv_obj_t* p_parent, const char* p_symbol, lv_event_cb_t cb, void* p_user)
 {
     lv_obj_t* const p_btn = ui::button(p_parent, p_symbol, cb, p_user);
-    lv_obj_set_size(p_btn, HEADER_BUTTON_SIZE, HEADER_BUTTON_SIZE);
+    lv_obj_set_size(p_btn, fw::theme::px(HEADER_BUTTON_SIZE), fw::theme::px(HEADER_BUTTON_SIZE));
     return p_btn;
 }
 
@@ -59,7 +59,7 @@ void WifiApp::create_header(lv_obj_t* p_root)
     lv_obj_set_size(p_header, LV_PCT(100), LV_SIZE_CONTENT);
     lv_obj_set_flex_flow(p_header, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(p_header, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(p_header, fw::theme::PAD_NORMAL, 0);
+    lv_obj_set_style_pad_column(p_header, fw::theme::pad(), 0);
 
     m_p_status = ui::label(p_header, "", fw::theme::font_small(), fw::theme::COLOR_TEXT);
     lv_obj_set_flex_grow(m_p_status, 1);
@@ -191,8 +191,8 @@ void WifiApp::open_password_dialog()
     lv_obj_add_flag(m_p_dialog, LV_OBJ_FLAG_FLOATING);
     lv_obj_set_size(m_p_dialog, LV_PCT(100), LV_PCT(100));
     lv_obj_align(m_p_dialog, LV_ALIGN_TOP_LEFT, 0, 0);
-    lv_obj_set_style_pad_all(m_p_dialog, DIALOG_PAD, 0);
-    lv_obj_set_style_pad_row(m_p_dialog, DIALOG_PAD, 0);
+    lv_obj_set_style_pad_all(m_p_dialog, fw::theme::px(DIALOG_PAD), 0);
+    lv_obj_set_style_pad_row(m_p_dialog, fw::theme::px(DIALOG_PAD), 0);
     lv_obj_set_style_radius(m_p_dialog, 0, 0);
     lv_obj_set_flex_flow(m_p_dialog, LV_FLEX_FLOW_COLUMN);
     lv_obj_remove_flag(m_p_dialog, LV_OBJ_FLAG_SCROLLABLE);
