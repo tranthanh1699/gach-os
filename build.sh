@@ -6,7 +6,7 @@
 #
 # Actions : build (mặc định) | flash | monitor | flash-monitor | menuconfig | size
 #           clean | fullclean | check (chỉ kiểm tra layer matrix) | shell (Docker)
-# Options : -b, --board <name>  Board đích (mặc định: $BOARD hoặc esp32_2432s028)
+# Options : -b, --board <name>  Board đích (mặc định: $BOARD hoặc jc8012p4a1c)
 #           -p, --port <dev>    Cổng serial khi flash/monitor (VD: /dev/ttyUSB0)
 #           -d, --docker        Bắt buộc chạy trong Docker
 #           -n, --native        Bắt buộc dùng ESP-IDF cài trên máy
@@ -20,7 +20,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DOCKER_IMAGE="${DOCKER_IMAGE:-gach-os-idf:latest}"
-BOARD="${BOARD:-esp32_2432s028}"
+BOARD="${BOARD:-jc8012p4a1c}"
 PORT="${PORT:-}"
 MODE="auto"
 ACTION="build"

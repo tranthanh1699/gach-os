@@ -30,8 +30,8 @@
 - **Apps**: `(apps)`, `(launcher)`, `(settings)`, `(sysinfo)`, `(stopwatch)`, `(touch_test)`
 - **Framework**: `(framework)`, `(app_manager)`, `(shell)`, `(services)`, `(lvgl_port)`, `(theme)`
 - **Contracts**: `(hal_api)`, `(mcal)`, `(osal)`, `(common)`
-- **Drivers**: `(drivers)`, `(ili9341)`, `(xpt2046)`, `(backlight)`
-- **Platform**: `(esp32)`, `(esp32/mcal)`, `(esp32_2432s028)` – tên chip / board
+- **Drivers**: `(drivers)`, `(backlight)`
+- **Platform**: `(esp32)`, `(esp32/mcal)`, `(jc8012p4a1c)` – tên chip / board
 - **Toolchain**: `(build)`, `(docker)`, `(layer_check)`, `(ci)`, `(vscode)`
 
 ## 4. Attribution (BẮT BUỘC)
@@ -44,7 +44,7 @@
 
 ```text
 feat(settings): add brightness slider backed by fw::Services
-fix(xpt2046): swap raw axes for esp32_2432s028 calibration
+fix(jc8012p4a1c): mirror touch y axis to match panel scan
 refactor(hal_api): split IBacklight out of IDisplay
 build(esp32): pin lvgl to 9.2.2 via component manager
 ```

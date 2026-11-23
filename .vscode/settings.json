@@ -1,7 +1,7 @@
 {
     "files.associations": { "*.hpp": "cpp" },
     "editor.formatOnSave": false,
-    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/esp32_2432s028/compile_commands.json",
+    "C_Cpp.default.compileCommands": "${workspaceFolder}/build/jc8012p4a1c/compile_commands.json",
     "C_Cpp.default.cppStandard": "gnu++17",
     "idf.espIdfPath": "${env:IDF_PATH}",
     "files.exclude": { "**/managed_components": true }

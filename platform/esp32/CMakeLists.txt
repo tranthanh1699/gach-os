@@ -8,7 +8,7 @@
 cmake_minimum_required(VERSION 3.16)
 
 if(NOT DEFINED BOARD)
-    set(BOARD "esp32_2432s028")
+    set(BOARD "jc8012p4a1c")
 endif()
 
 set(OS_ROOT_DIR "${CMAKE_CURRENT_LIST_DIR}/../..")
