@@ -130,6 +130,7 @@ end
 
 -- ===================== Lưu trữ =====================
 -- "state" = "điểm|cờ thắng|16 ô cách nhau dấu phẩy" (<= 128 ký tự), "best" = điểm cao nhất.
+local saved_best = 0
 local function save()
   local cells = {}
   for r = 1, N do
@@ -137,11 +138,15 @@ local function save()
   end
   local flags = won and "w" or ""
   gach.storage.set("state", score .. "|" .. flags .. "|" .. table.concat(cells, ","))
-  gach.storage.set("best", tostring(best))
+  if best ~= saved_best then              -- ghi thẻ SD chậm: chỉ ghi điểm cao nhất khi đổi
+    gach.storage.set("best", tostring(best))
+    saved_best = best
+  end
 end
 
 local function load()
   best = tonumber(gach.storage.get("best") or "") or 0
+  saved_best = best
   local raw = gach.storage.get("state")
   local s, flags, cells = (raw or ""):match("^(%d+)|(%a*)|([%d,]+)$")
   if not s then return false end
