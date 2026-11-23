@@ -414,6 +414,9 @@ fetch_main = function()
                         data.current.weather_code, #body))
     app.render()
   end)
+  if why == "busy" then
+    return true -- Yêu cầu trước còn chạy và sẽ tự cập nhật màn hình: không báo lỗi.
+  end
   if not ok then
     fail((why == "offline") and "Offline - connect Wi-Fi in Settings" or ("Network " .. tostring(why)))
   end
