@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "common/string_utils.hpp"
 #include "frame_codec.hpp"
 #include "framework/system.hpp"
 #include "framework/ui_lock.hpp"
@@ -435,6 +436,60 @@ void cmd_uninstall(uint8_t id, const char* p_id)
     send_resp(id, common::is_ok(status), common::is_ok(status) ? "removed" : last_error());
 }
 
+// ---- Điều khiển app: chạy trên task UI ----
+// Mở/đóng app chạy on_create/on_resume/on_back của app (máy ảo Lua, dựng UI, layout LVGL): sâu hơn nhiều so với
+// stack 6 KiB của bridge (đã gặp tràn stack khi launch). Bridge chỉ hẹn một lv_timer chạy một lần trên task UI
+// rồi chờ cờ hoàn tất (đọc dưới UiLock, cùng cách với perf bench).
+enum class UiOp : uint8_t { LAUNCH, HOME, BACK };
+
+struct UiJob {
+    UiOp op;
+    char app_id[runtime::PACKAGE_ID_BUF_LEN];
+    common::Status status;
+    bool is_done;
+};
+
+UiJob s_ui_job;
+
+void ui_job_cb(lv_timer_t* p_timer)
+{
+    (void)p_timer;
+    fw::AppManager& apps = fw::app_manager();
+    s_ui_job.status = common::Status::OK;
+    if (s_ui_job.op == UiOp::LAUNCH) {
+        s_ui_job.status = apps.launch(s_ui_job.app_id);
+    } else if (s_ui_job.op == UiOp::HOME) {
+        apps.home();
+    } else {
+        apps.back();
+    }
+    s_ui_job.is_done = true;
+}
+
+/** @return false nếu task UI không xử lý kịp (UI treo). */
+bool run_on_ui(UiOp op, const char* p_app, common::Status& status)
+{
+    constexpr uint32_t POLL_MS = 20U;
+    constexpr uint32_t TIMEOUT_MS = 5000U;
+    {
+        fw::UiLock lock;
+        s_ui_job.op = op;
+        (void)common::copy_string(s_ui_job.app_id, sizeof(s_ui_job.app_id), (p_app != nullptr) ? p_app : "");
+        s_ui_job.is_done = false;
+        lv_timer_t* const p_timer = lv_timer_create(&ui_job_cb, 0U, nullptr);
+        lv_timer_set_repeat_count(p_timer, 1); // Một lần rồi tự xóa.
+    }
+    for (uint32_t waited = 0U; waited < TIMEOUT_MS; waited += POLL_MS) {
+        osal::delay_ms(POLL_MS);
+        fw::UiLock lock;
+        if (s_ui_job.is_done) {
+            status = s_ui_job.status;
+            return true;
+        }
+    }
+    return false;
+}
+
 void cmd_launch(uint8_t id, const char* p_app)
 {
     if (p_app == nullptr) {
@@ -442,24 +497,18 @@ void cmd_launch(uint8_t id, const char* p_app)
         return;
     }
     common::Status status = common::Status::OK;
-    {
-        fw::UiLock lock;
-        status = fw::app_manager().launch(p_app);
+    if (!run_on_ui(UiOp::LAUNCH, p_app, status)) {
+        send_resp(id, false, "ui busy (timeout)");
+        return;
     }
     send_resp(id, common::is_ok(status), common::is_ok(status) ? nullptr : "no such app");
 }
 
 void cmd_navigate(uint8_t id, bool is_home)
 {
-    {
-        fw::UiLock lock;
-        if (is_home) {
-            fw::app_manager().home();
-        } else {
-            fw::app_manager().back();
-        }
-    }
-    send_resp(id, true, nullptr);
+    common::Status status = common::Status::OK;
+    const bool is_ok = run_on_ui(is_home ? UiOp::HOME : UiOp::BACK, nullptr, status);
+    send_resp(id, is_ok, is_ok ? nullptr : "ui busy (timeout)");
 }
 
 /** @brief Hiệu năng vẽ của LVGL trong cửa sổ đo hiện tại (perf reset = bắt đầu cửa sổ mới). */
