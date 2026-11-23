@@ -1,6 +1,6 @@
 /**
  * @file    esp32_sd_filesystem.cpp
- * @brief   Hiện thực filesystem thẻ SD (esp_vfs_fat + sdspi).
+ * @brief   Hiện thực filesystem thẻ SD (esp_vfs_fat + sdspi / sdmmc).
  */
 #include "esp32_mcal/esp32_sd_filesystem.hpp"
 
@@ -12,6 +12,12 @@
 #include "driver/sdspi_host.h"
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
+#if SOC_SDMMC_HOST_SUPPORTED
+#include "driver/sdmmc_host.h"
+#endif
+#if SOC_SDMMC_HOST_SUPPORTED && SOC_GP_LDO_SUPPORTED
+#include "sd_pwr_ctrl_by_on_chip_ldo.h"
+#endif
 
 namespace esp32_mcal {
 
@@ -22,6 +28,14 @@ constexpr size_t NATIVE_PATH_LEN = hal::FS_PATH_MAX_LEN + 8U;
 constexpr int VFS_MAX_FILES = 6;
 constexpr size_t ALLOCATION_UNIT = 16U * 1024U;
 constexpr mode_t DIR_MODE = 0775;
+
+#if SOC_SDMMC_HOST_SUPPORTED
+/** @brief Thay cho sdmmc_host_deinit khi mount lỗi: giữ controller cho slot khác đang dùng chung. */
+esp_err_t keep_host_alive()
+{
+    return ESP_OK;
+}
+#endif
 
 } // namespace
 
@@ -50,6 +64,51 @@ common::Status Esp32SdFileSystem::mount(spi_host_device_t host, gpio_num_t cs)
     m_is_mounted = true;
     return common::Status::OK;
 }
+
+#if SOC_SDMMC_HOST_SUPPORTED
+common::Status Esp32SdFileSystem::mount_sdmmc(const SdmmcConfig& cfg)
+{
+    if (m_is_mounted) {
+        return common::Status::ERR_STATE;
+    }
+    sdmmc_host_t host_cfg = SDMMC_HOST_DEFAULT();
+    host_cfg.slot = cfg.slot;
+    host_cfg.max_freq_khz = cfg.max_freq_khz;
+    host_cfg.deinit = &keep_host_alive;
+
+#if SOC_GP_LDO_SUPPORTED
+    if (cfg.pwr_ldo_channel >= 0) {
+        sd_pwr_ctrl_ldo_config_t ldo_cfg{};
+        ldo_cfg.ldo_chan_id = cfg.pwr_ldo_channel;
+        sd_pwr_ctrl_handle_t p_pwr = nullptr;
+        if (sd_pwr_ctrl_new_on_chip_ldo(&ldo_cfg, &p_pwr) != ESP_OK) {
+            return common::Status::ERR_IO;
+        }
+        host_cfg.pwr_ctrl_handle = p_pwr;
+    }
+#endif
+
+    sdmmc_slot_config_t slot_cfg = SDMMC_SLOT_CONFIG_DEFAULT();
+    slot_cfg.width = cfg.bus_width;
+
+    esp_vfs_fat_sdmmc_mount_config_t mount_cfg{};
+    mount_cfg.format_if_mount_failed = false; // Không bao giờ tự format thẻ của người dùng.
+    mount_cfg.max_files = VFS_MAX_FILES;
+    mount_cfg.allocation_unit_size = ALLOCATION_UNIT;
+
+    if (esp_vfs_fat_sdmmc_mount(MOUNT_POINT, &host_cfg, &slot_cfg, &mount_cfg, &m_p_card) != ESP_OK) {
+        m_p_card = nullptr;
+#if SOC_GP_LDO_SUPPORTED
+        if (host_cfg.pwr_ctrl_handle != nullptr) {
+            (void)sd_pwr_ctrl_del_on_chip_ldo(host_cfg.pwr_ctrl_handle); // Trả kênh LDO khi không có thẻ.
+        }
+#endif
+        return common::Status::ERR_IO;
+    }
+    m_is_mounted = true;
+    return common::Status::OK;
+}
+#endif
 
 bool Esp32SdFileSystem::to_native(const char* p_path, char* p_out, size_t out_len) const
 {
