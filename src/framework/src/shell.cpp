@@ -14,8 +14,8 @@ namespace {
 // Kích thước theo dp (theme::px đổi sang pixel thật).
 constexpr int32_t BAR_PAD_HOR = 8;
 constexpr int32_t STATUS_ICON_GAP = 6;
-constexpr int32_t NAV_BUTTON_WIDTH = 72;
-constexpr int32_t NAV_BUTTON_INSET = 6; /**< Nút nav thấp hơn thanh nav một chút. */
+constexpr uint32_t NAV_PRESSED_COLOR = 0x1F2937U; /**< Nền nửa thanh nav đang bị nhấn. */
+constexpr int32_t NAV_PRESSED_RADIUS = 12;
 
 lv_obj_t* create_bar(lv_obj_t* p_parent, int32_t height)
 {
@@ -76,8 +76,11 @@ void Shell::create(AppManager& apps, const Services& services)
     lv_obj_set_scrollable(m_p_content, false);
 
     // Nav bar: Back / Home (kiểu Android, tương đương soft-key của S60).
+    // Mỗi nút phủ NỬA thanh và TOÀN BỘ chiều cao: cảm ứng báo tọa độ sát mép dưới chỉ tới y = H - 5, nút
+    // nhỏ đặt giữa thanh làm phần lớn cú chạm ở mép (tư thế bấm tự nhiên) rơi ra ngoài nút.
     lv_obj_t* const p_nav = create_bar(p_screen, theme::px(config::NAV_BAR_HEIGHT));
-    lv_obj_set_flex_align(p_nav, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_all(p_nav, 0, 0);
+    lv_obj_set_flex_align(p_nav, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     (void)create_nav_button(p_nav, LV_SYMBOL_LEFT, &Shell::on_back_clicked);
     (void)create_nav_button(p_nav, LV_SYMBOL_HOME, &Shell::on_home_clicked);
 
@@ -93,14 +96,18 @@ void Shell::on_foreground_changed(const App& app)
 lv_obj_t* Shell::create_nav_button(lv_obj_t* p_parent, const char* p_symbol, lv_event_cb_t cb)
 {
     lv_obj_t* const p_btn = lv_button_create(p_parent);
-    lv_obj_set_size(p_btn, theme::px(NAV_BUTTON_WIDTH), theme::px(config::NAV_BAR_HEIGHT - NAV_BUTTON_INSET));
-    lv_obj_set_style_bg_opa(p_btn, LV_OPA_TRANSP, 0);
-    lv_obj_set_style_shadow_width(p_btn, 0, 0);
+    lv_obj_remove_style_all(p_btn);
+    lv_obj_set_height(p_btn, LV_PCT(100));
+    lv_obj_set_flex_grow(p_btn, 1); // Hai nút chia đôi chiều ngang thanh nav.
+    lv_obj_set_style_radius(p_btn, theme::px(NAV_PRESSED_RADIUS), 0);
+    lv_obj_set_style_bg_color(p_btn, lv_color_hex(NAV_PRESSED_COLOR), LV_STATE_PRESSED);
+    lv_obj_set_style_bg_opa(p_btn, LV_OPA_COVER, LV_STATE_PRESSED);
     lv_obj_add_event_cb(p_btn, cb, LV_EVENT_CLICKED, this);
 
     lv_obj_t* const p_label = lv_label_create(p_btn);
     lv_label_set_text(p_label, p_symbol);
     lv_obj_set_style_text_color(p_label, lv_color_hex(theme::COLOR_TEXT), 0);
+    lv_obj_set_style_text_font(p_label, theme::font_medium(), 0);
     lv_obj_center(p_label);
     return p_btn;
 }
