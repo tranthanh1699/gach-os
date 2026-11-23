@@ -11,7 +11,7 @@
 namespace fw {
 namespace config {
 
-constexpr size_t MAX_APPS = 48U;      /**< Số app tối đa đăng ký được (tích hợp + cài thêm). */
+constexpr size_t MAX_APPS = 160U;     /**< Số app tối đa đăng ký được (tích hợp + cài thêm, >= runtime::MAX_PACKAGES + app tích hợp). */
 constexpr size_t MAX_APP_STACK = 4U;  /**< Độ sâu back-stack (bao gồm home). */
 
 

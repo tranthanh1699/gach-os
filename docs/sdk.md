@@ -176,7 +176,7 @@ Thư viện Lua có sẵn: `string`, `table`, `math`, `utf8`, `coroutine` và c�
 | Thời gian mỗi lần gọi (callback, vòng đời) | 500 ms | Lỗi `script timeout` |
 | Widget | 96 / app | Lỗi `too many UI objects` |
 | Timer | 8 / app | Lỗi `too many timers` |
-| App cài đồng thời | 32 | Báo lỗi `too many apps installed`, gói được giữ lại trong `/install` |
+| App cài đồng thời | 128 | Báo lỗi `too many apps installed`, gói được giữ lại trong `/install` |
 | App script mở cùng lúc | 1 (mở app khác sẽ đóng app trước) | |
 
 Khi app gặp lỗi, chỉ app đó hiện màn hình **App error** kèm thông báo; OS và các app khác vẫn chạy bình thường. Nhấn Back để thoát.

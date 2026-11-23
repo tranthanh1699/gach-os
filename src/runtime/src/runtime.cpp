@@ -52,7 +52,7 @@ void set_error(const char* p_subject, const char* p_reason)
     (void)std::snprintf(s_error, sizeof(s_error), "%s: %s", p_subject, p_reason);
 }
 
-// Tĩnh (~2 KiB): không đặt trên stack của task main lúc boot.
+// Tĩnh (~8 KiB): không đặt trên stack của task main lúc boot.
 NameBatch s_batch;
 
 bool ends_with(const char* p_text, const char* p_suffix)

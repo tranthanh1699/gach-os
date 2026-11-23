@@ -16,6 +16,7 @@
 #include "framework/system.hpp"
 #include "framework/ui_lock.hpp"
 #include "hal_api/board.hpp"
+#include "lvgl.h"
 #include "osal/osal.hpp"
 #include "runtime/runtime.hpp"
 #include "runtime/sdk_version.hpp"
@@ -191,6 +192,28 @@ void cmd_mem(uint8_t id)
     (void)std::snprintf(text, sizeof(text), "heap_free=%u heap_min=%u uptime_ms=%u",
                         static_cast<unsigned>(info.heap_free_bytes), static_cast<unsigned>(info.heap_min_bytes),
                         static_cast<unsigned>(osal::tick_ms()));
+    hal::MemoryStats mem{};
+    if (s_p_devices->p_system->get_memory_stats(mem) == common::Status::OK) {
+        char detail[TEXT_BUF_LEN];
+        (void)std::snprintf(detail, sizeof(detail),
+                            "internal free=%u min=%u largest=%u total=%u | psram free=%u min=%u total=%u",
+                            static_cast<unsigned>(mem.internal_free), static_cast<unsigned>(mem.internal_min),
+                            static_cast<unsigned>(mem.internal_largest), static_cast<unsigned>(mem.internal_total),
+                            static_cast<unsigned>(mem.psram_free), static_cast<unsigned>(mem.psram_min),
+                            static_cast<unsigned>(mem.psram_total));
+        send_text(id, detail);
+    }
+    lv_mem_monitor_t mon{};
+    {
+        fw::UiLock lock; // Heap LVGL chỉ an toàn khi đọc trong ngữ cảnh UI.
+        lv_mem_monitor(&mon);
+    }
+    char lvgl_text[TEXT_BUF_LEN];
+    (void)std::snprintf(lvgl_text, sizeof(lvgl_text), "lvgl free=%u total=%u used=%u%% frag=%u%% max_used=%u",
+                        static_cast<unsigned>(mon.free_size), static_cast<unsigned>(mon.total_size),
+                        static_cast<unsigned>(mon.used_pct), static_cast<unsigned>(mon.frag_pct),
+                        static_cast<unsigned>(mon.max_used));
+    send_text(id, lvgl_text);
     send_resp(id, true, text);
 }
 

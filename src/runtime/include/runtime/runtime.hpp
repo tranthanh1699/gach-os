@@ -22,7 +22,7 @@ class AppManager;
 
 namespace runtime {
 
-constexpr size_t MAX_PACKAGES = 32U;       /**< Số app cài thêm tối đa (mỗi slot ~0.2 KiB RAM tĩnh). */
+constexpr size_t MAX_PACKAGES = 128U;      /**< Số app cài thêm tối đa (mỗi slot ~0.2 KiB RAM tĩnh + 64 B bộ đệm quét). */
 constexpr size_t PACKAGE_ID_BUF_LEN = 32U; /**< Id gói tối đa 31 ký tự + ký tự kết thúc. */
 
 /** @brief Thông tin hiển thị của một gói đã cài. */
