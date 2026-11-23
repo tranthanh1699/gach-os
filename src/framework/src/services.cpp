@@ -14,6 +14,7 @@ void Services::bind(const hal::Devices& devices)
     m_p_devices = &devices;
     m_wifi.bind(devices);
     m_time.bind(devices);
+    m_files.bind(devices);
 }
 
 bool Services::has_backlight() const

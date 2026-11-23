@@ -9,6 +9,7 @@
 
 #include "common/non_copyable.hpp"
 #include "common/status.hpp"
+#include "framework/file_service.hpp"
 #include "framework/time_service.hpp"
 #include "framework/wifi_service.hpp"
 
@@ -83,6 +84,10 @@ public:
     WifiService& wifi() { return m_wifi; }
     const WifiService& wifi() const { return m_wifi; }
 
+    /** @return Dịch vụ file (bộ nhớ ngoài). */
+    FileService& files() { return m_files; }
+    const FileService& files() const { return m_files; }
+
     /** @return Dịch vụ thời gian. */
     TimeService& time() { return m_time; }
     const TimeService& time() const { return m_time; }
@@ -115,6 +120,7 @@ private:
     const hal::Devices* m_p_devices;
     WifiService m_wifi;
     TimeService m_time;
+    FileService m_files;
 };
 
 } // namespace fw
