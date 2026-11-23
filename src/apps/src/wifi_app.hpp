@@ -37,6 +37,9 @@ private:
     static void on_disconnect_clicked(lv_event_t* p_event);
     static void on_network_clicked(lv_event_t* p_event);
     static void on_keyboard_event(lv_event_t* p_event);
+    static void on_join_clicked(lv_event_t* p_event);
+    static void on_cancel_clicked(lv_event_t* p_event);
+    static void on_reveal_clicked(lv_event_t* p_event);
 
     lv_obj_t* m_p_root;
     lv_obj_t* m_p_status;

@@ -21,7 +21,86 @@ constexpr uint32_t REFRESH_PERIOD_MS = 500U;
 constexpr int32_t HEADER_BUTTON_SIZE = 36;
 constexpr size_t ITEM_TEXT_LEN = 64U;
 constexpr size_t STATUS_TEXT_LEN = 80U;
-constexpr int32_t DIALOG_PAD = 2;
+// ---- Màn nhập mật khẩu (dp) – kiểu bàn phím iPad: ô nhập ở giữa phần trên, bàn phím cố định ở đáy ----
+constexpr uint32_t COLOR_KB_BG = 0x1C1C1EU;       /**< Nền bàn phím. */
+constexpr uint32_t COLOR_KEY = 0x4A4A4CU;         /**< Phím chữ. */
+constexpr uint32_t COLOR_KEY_SPECIAL = 0x2F2F31U; /**< Phím chức năng (shift, xóa, OK...). */
+constexpr uint32_t COLOR_KEY_PRESSED = 0x6E6E72U;
+constexpr uint32_t COLOR_FIELD_BG = 0x1C1C1EU;
+constexpr uint32_t COLOR_FIELD_BORDER = 0x3A3A3CU;
+constexpr uint32_t COLOR_ACCENT = 0x0A84FFU;
+constexpr uint32_t COLOR_HINT = 0x8E8E93U;
+constexpr int32_t KB_HEIGHT = 250;
+constexpr int32_t KB_PAD = 8;
+constexpr int32_t KB_KEY_GAP = 7;
+constexpr int32_t KB_KEY_RADIUS = 8;
+constexpr int32_t FORM_GAP = 14;
+constexpr int32_t FIELD_WIDTH = 420;
+constexpr int32_t FIELD_PAD = 12;
+constexpr int32_t FIELD_RADIUS = 10;
+constexpr int32_t ACTION_WIDTH = 120;
+constexpr int32_t ACTION_HEIGHT = 40;
+constexpr size_t TITLE_TEXT_LEN = 96U;
+
+void style_keyboard(lv_obj_t* p_kb)
+{
+    lv_obj_set_style_bg_color(p_kb, lv_color_hex(COLOR_KB_BG), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(p_kb, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_border_width(p_kb, 0, LV_PART_MAIN);
+    lv_obj_set_style_radius(p_kb, 0, LV_PART_MAIN);
+    lv_obj_set_style_pad_all(p_kb, fw::theme::px(KB_PAD), LV_PART_MAIN);
+    lv_obj_set_style_pad_row(p_kb, fw::theme::px(KB_KEY_GAP), LV_PART_MAIN);
+    lv_obj_set_style_pad_column(p_kb, fw::theme::px(KB_KEY_GAP), LV_PART_MAIN);
+
+    lv_obj_set_style_bg_color(p_kb, lv_color_hex(COLOR_KEY), LV_PART_ITEMS);
+    lv_obj_set_style_bg_opa(p_kb, LV_OPA_COVER, LV_PART_ITEMS);
+    lv_obj_set_style_radius(p_kb, fw::theme::px(KB_KEY_RADIUS), LV_PART_ITEMS);
+    lv_obj_set_style_border_width(p_kb, 0, LV_PART_ITEMS);
+    lv_obj_set_style_shadow_width(p_kb, 0, LV_PART_ITEMS);
+    lv_obj_set_style_text_color(p_kb, lv_color_white(), LV_PART_ITEMS);
+    lv_obj_set_style_text_font(p_kb, fw::theme::font_medium(), LV_PART_ITEMS);
+    // Phím chức năng mang cờ CHECKED trong bản đồ phím của LVGL -> tô tối hơn như iOS.
+    lv_obj_set_style_bg_color(p_kb, lv_color_hex(COLOR_KEY_SPECIAL), static_cast<lv_style_selector_t>(LV_PART_ITEMS) | LV_STATE_CHECKED);
+    lv_obj_set_style_text_color(p_kb, lv_color_white(), static_cast<lv_style_selector_t>(LV_PART_ITEMS) | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_color(p_kb, lv_color_hex(COLOR_KEY_PRESSED), static_cast<lv_style_selector_t>(LV_PART_ITEMS) | LV_STATE_PRESSED);
+}
+
+void style_field(lv_obj_t* p_field)
+{
+    lv_obj_set_width(p_field, fw::theme::px(FIELD_WIDTH));
+    lv_obj_set_style_bg_color(p_field, lv_color_hex(COLOR_FIELD_BG), 0);
+    lv_obj_set_style_bg_opa(p_field, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(p_field, fw::theme::px(FIELD_RADIUS), 0);
+    lv_obj_set_style_border_width(p_field, 1, 0);
+    lv_obj_set_style_border_color(p_field, lv_color_hex(COLOR_FIELD_BORDER), 0);
+    lv_obj_set_style_border_color(p_field, lv_color_hex(COLOR_ACCENT), LV_STATE_FOCUSED);
+    lv_obj_set_style_pad_all(p_field, fw::theme::px(FIELD_PAD), 0);
+    lv_obj_set_style_text_font(p_field, fw::theme::font_medium(), 0);
+    lv_obj_set_style_text_color(p_field, lv_color_white(), 0);
+    lv_obj_set_style_text_color(p_field, lv_color_hex(COLOR_HINT), LV_PART_TEXTAREA_PLACEHOLDER);
+    lv_obj_set_style_border_color(p_field, lv_color_hex(COLOR_ACCENT), LV_PART_CURSOR);
+}
+
+lv_obj_t* plain_row(lv_obj_t* p_parent, int32_t gap)
+{
+    lv_obj_t* const p_row = lv_obj_create(p_parent);
+    lv_obj_remove_style_all(p_row);
+    lv_obj_set_size(p_row, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+    lv_obj_set_flex_flow(p_row, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(p_row, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_column(p_row, gap, 0);
+    return p_row;
+}
+
+lv_obj_t* action_button(lv_obj_t* p_parent, const char* p_text, uint32_t bg, lv_event_cb_t cb, void* p_user)
+{
+    lv_obj_t* const p_btn = ui::button(p_parent, p_text, cb, p_user);
+    lv_obj_set_size(p_btn, fw::theme::px(ACTION_WIDTH), fw::theme::px(ACTION_HEIGHT));
+    lv_obj_set_style_bg_color(p_btn, lv_color_hex(bg), 0);
+    lv_obj_set_style_radius(p_btn, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_shadow_width(p_btn, 0, 0);
+    return p_btn;
+}
 
 lv_obj_t* icon_button(lv_obj_t* p_parent, const char* p_symbol, lv_event_cb_t cb, void* p_user)
 {
@@ -185,27 +264,50 @@ void WifiApp::open_password_dialog()
     if (m_p_dialog != nullptr) {
         return;
     }
-    // Dialog nổi phủ toàn vùng app (FLOATING: không tham gia layout flex của root).
+    // Màn nổi phủ toàn vùng app (FLOATING: không tham gia layout flex của root).
+    // Phần trên (co giãn): tiêu đề, ô mật khẩu + nút hiện/ẩn, Cancel/Join. Phần dưới: bàn phím cao cố định.
     m_p_dialog = lv_obj_create(m_p_root);
+    lv_obj_remove_style_all(m_p_dialog);
     lv_obj_set_floating(m_p_dialog, true);
     lv_obj_set_size(m_p_dialog, LV_PCT(100), LV_PCT(100));
     lv_obj_align(m_p_dialog, LV_ALIGN_TOP_LEFT, 0, 0);
-    lv_obj_set_style_pad_all(m_p_dialog, fw::theme::px(DIALOG_PAD), 0);
-    lv_obj_set_style_pad_row(m_p_dialog, fw::theme::px(DIALOG_PAD), 0);
-    lv_obj_set_style_radius(m_p_dialog, 0, 0);
+    lv_obj_set_style_bg_color(m_p_dialog, lv_color_hex(fw::theme::COLOR_SCREEN_BG), 0);
+    lv_obj_set_style_bg_opa(m_p_dialog, LV_OPA_COVER, 0);
     lv_obj_set_flex_flow(m_p_dialog, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_scrollable(m_p_dialog, false);
+    lv_obj_set_clickable(m_p_dialog, true); // Chặn chạm xuống danh sách mạng phía sau.
 
-    m_p_password = lv_textarea_create(m_p_dialog);
-    lv_obj_set_width(m_p_password, LV_PCT(100));
+    lv_obj_t* const p_form = lv_obj_create(m_p_dialog);
+    lv_obj_remove_style_all(p_form);
+    lv_obj_set_width(p_form, LV_PCT(100));
+    lv_obj_set_flex_grow(p_form, 1);
+    lv_obj_set_flex_flow(p_form, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(p_form, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
+    lv_obj_set_style_pad_row(p_form, fw::theme::px(FORM_GAP), 0);
+
+    char title[TITLE_TEXT_LEN] = {};
+    (void)std::snprintf(title, sizeof(title), "Enter the password for \"%s\"", m_selected_ssid);
+    (void)ui::label(p_form, title, fw::theme::font_medium(), fw::theme::COLOR_TEXT);
+
+    lv_obj_t* const p_field_row = plain_row(p_form, fw::theme::px(KB_KEY_GAP));
+    m_p_password = lv_textarea_create(p_field_row);
+    style_field(m_p_password);
     lv_textarea_set_one_line(m_p_password, true);
     lv_textarea_set_password_mode(m_p_password, true);
     lv_textarea_set_max_length(m_p_password, static_cast<uint32_t>(fw::WIFI_PASSWORD_BUF_LEN - 1U));
-    lv_textarea_set_placeholder_text(m_p_password, m_selected_ssid);
+    lv_textarea_set_placeholder_text(m_p_password, "Password");
+    lv_obj_add_state(m_p_password, LV_STATE_FOCUSED); // Hiện con trỏ ngay.
+    lv_obj_t* const p_reveal = action_button(p_field_row, LV_SYMBOL_EYE_OPEN, COLOR_KEY_SPECIAL,
+                                             &WifiApp::on_reveal_clicked, this);
+    lv_obj_set_width(p_reveal, fw::theme::px(ACTION_HEIGHT + FIELD_PAD));
+
+    lv_obj_t* const p_actions = plain_row(p_form, fw::theme::px(FORM_GAP));
+    (void)action_button(p_actions, "Cancel", COLOR_KEY_SPECIAL, &WifiApp::on_cancel_clicked, this);
+    (void)action_button(p_actions, "Join", COLOR_ACCENT, &WifiApp::on_join_clicked, this);
 
     lv_obj_t* const p_keyboard = lv_keyboard_create(m_p_dialog);
-    lv_obj_set_width(p_keyboard, LV_PCT(100));
-    lv_obj_set_flex_grow(p_keyboard, 1);
+    lv_obj_set_size(p_keyboard, LV_PCT(100), fw::theme::px(KB_HEIGHT));
+    style_keyboard(p_keyboard);
     lv_keyboard_set_textarea(p_keyboard, m_p_password);
     lv_obj_add_event_cb(p_keyboard, &WifiApp::on_keyboard_event, LV_EVENT_READY, this);
     lv_obj_add_event_cb(p_keyboard, &WifiApp::on_keyboard_event, LV_EVENT_CANCEL, this);
@@ -251,6 +353,34 @@ void WifiApp::on_network_clicked(lv_event_t* p_event)
     auto* const p_self = static_cast<WifiApp*>(lv_event_get_user_data(p_event));
     void* const p_data = lv_obj_get_user_data(lv_event_get_current_target_obj(p_event));
     p_self->select_network(static_cast<size_t>(reinterpret_cast<uintptr_t>(p_data)));
+}
+
+void WifiApp::on_join_clicked(lv_event_t* p_event)
+{
+    auto* const p_self = static_cast<WifiApp*>(lv_event_get_user_data(p_event));
+    if (p_self->m_p_password != nullptr) {
+        p_self->connect_selected(lv_textarea_get_text(p_self->m_p_password));
+    }
+    p_self->close_password_dialog();
+}
+
+void WifiApp::on_cancel_clicked(lv_event_t* p_event)
+{
+    static_cast<WifiApp*>(lv_event_get_user_data(p_event))->close_password_dialog();
+}
+
+void WifiApp::on_reveal_clicked(lv_event_t* p_event)
+{
+    auto* const p_self = static_cast<WifiApp*>(lv_event_get_user_data(p_event));
+    if (p_self->m_p_password == nullptr) {
+        return;
+    }
+    const bool is_hidden = lv_textarea_get_password_mode(p_self->m_p_password);
+    lv_textarea_set_password_mode(p_self->m_p_password, !is_hidden);
+    lv_obj_t* const p_label = lv_obj_get_child(lv_event_get_current_target_obj(p_event), 0);
+    if (p_label != nullptr) {
+        lv_label_set_text_static(p_label, is_hidden ? LV_SYMBOL_EYE_CLOSE : LV_SYMBOL_EYE_OPEN);
+    }
 }
 
 void WifiApp::on_keyboard_event(lv_event_t* p_event)
