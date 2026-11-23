@@ -1,6 +1,8 @@
 # Build & Flash
 
-Hướng dẫn build firmware gach-os và nạp xuống board **ESP32-2432S028R (CYD)** (mặc định) hoặc **JC8012P4A1C** (ESP32-P4 10.1", xem [mục 7](#7-board-jc8012p4a1c-esp32-p4-101)). Mọi thao tác đi qua `./build.sh` ở gốc repo.
+> Dùng hằng ngày: xem bản tóm tắt [dev_workflow.md](dev_workflow.md) (build, flash, gach shell, vòng phát triển app).
+
+Hướng dẫn build firmware gach-os và nạp xuống board **JC8012P4A1C** (ESP32-P4 10.1", chi tiết phần cứng ở [mục 7](#7-board-jc8012p4a1c-esp32-p4-101)). Mọi thao tác đi qua `./build.sh` ở gốc repo.
 
 ## 1. Chuẩn bị (làm 1 lần)
 
@@ -32,7 +34,7 @@ Board ESP32-P4 bắt buộc IDF ≥ 6.1: bản cũ hơn thiếu workaround lỗi
 
 ### Driver USB
 
-CYD dùng chip USB-serial **CH340** → xuất hiện là `/dev/ttyUSB0`. Kiểm tra sau khi cắm cáp:
+Board dùng chip USB-serial **CH340** (cổng USB-UART) → xuất hiện là `/dev/ttyUSB0`. Kiểm tra sau khi cắm cáp:
 
 ```bash
 ls /dev/ttyUSB* /dev/ttyACM*
@@ -43,10 +45,10 @@ ls /dev/ttyUSB* /dev/ttyACM*
 ## 2. Build
 
 ```bash
-./build.sh                 # = ./build.sh build, board mặc định esp32_2432s028
+./build.sh                 # = ./build.sh build, board mặc định jc8012p4a1c
 ```
 
-Luồng: layer check → build ESP-IDF trong `platform/esp32` → output tại `build/esp32_2432s028/`:
+Luồng: layer check → build ESP-IDF trong `platform/esp32` → output tại `build/jc8012p4a1c/`:
 
 | File | Ý nghĩa |
 | :--- | :--- |
@@ -73,19 +75,19 @@ Lần build đầu tải LVGL qua Component Manager (cần Internet), các lần
 Log khởi động đúng sẽ có:
 
 ```
-I (xxx) board: ESP32-2432S028R ready (320x240, touch=yes)
-I (xxx) main: OS started on ESP32-2432S028R
+I (xxx) board: JC8012P4A1C ready (1280x800, sd=yes, wifi=yes)
+I (xxx) main: OS started on JC8012P4A1C
 ```
 
-Màn hình hiện Launcher với 4 icon: Stopwatch, Touch, System, Settings.
+Màn hình hiện Launcher (Wi-Fi, Apps, Stopwatch, Touch, Settings và các app cài thêm).
 
 ### Nạp thủ công bằng esptool (không cần build lại)
 
 Dùng khi chỉ có sẵn thư mục build (ví dụ artifact từ CI):
 
 ```bash
-cd build/esp32_2432s028
-python3 -m esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 write_flash @flash_args
+cd build/jc8012p4a1c
+python3 -m esptool --chip esp32p4 -p /dev/ttyUSB0 -b 460800 write_flash @flash_args
 ```
 
 ## 4. Thẻ SD và app cài thêm
@@ -119,11 +121,6 @@ python3 -m esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 write_flash @flash_arg
 | `Không thấy cổng /dev/ttyUSB0` | Cáp chỉ sạc (không có dây data), thiếu driver, hoặc `brltty` chiếm cổng. |
 | `Permission denied: '/dev/ttyUSB0'` | Chưa thuộc group `dialout` → `sudo usermod -aG dialout $USER`, đăng nhập lại. |
 | `Failed to connect to ESP32: No serial data received` | Giữ nút **BOOT**, nhấn-nhả **RST**, thả BOOT rồi flash lại. Có thể hạ baud: `./build.sh shell` rồi dùng esptool với `-b 115200`. |
-| Màn hình trắng, đèn nền sáng | Sai cấu hình panel. Thử `invert = true` trong `DISPLAY` ở [board_config.hpp](../platform/esp32/boards/esp32_2432s028/board/src/board_config.hpp). |
-| Hình bị lật / gương | Đổi `mirror_x` / `mirror_y` trong `DISPLAY`. |
-| Chạm lệch / ngược trục | Mở app **Touch**, so tọa độ hiển thị với vị trí chạm; chỉnh `swap_xy`, `invert_x/y`, `raw_*_min/max` trong `TOUCH`. |
-| Màn hình tối hẳn | Xem log: nếu có `Backlight PWM unavailable` thì GPIO21 bị chiếm/sai. |
-| Reset liên tục, log có `abort()` từ `board` | Lỗi init LCD SPI – dòng `E (...) board: ... failed` cho biết bước nào. |
 | Log `SD card unavailable`, app **Apps** báo `No SD card` | Thẻ chưa cắm, không phải FAT32, hoặc lỏng tiếp xúc. Cắm lại thẻ rồi khởi động lại. |
 | App cài thêm hiện **App error** | Lỗi trong mã Lua của app: thông báo hiện ngay trên màn hình và trong log serial (`[<id>] script error: ...`). |
 | Backtrace khi crash | `monitor` tự giải mã nhờ `gach_os.elf`; luôn mở monitor từ `./build.sh` để có symbol. |
@@ -152,3 +149,8 @@ python3 -m esptool --chip esp32 -p /dev/ttyUSB0 -b 460800 write_flash @flash_arg
 | Bootloader báo chip revision không hỗ trợ | IDF 6.x mặc định chỉ chạy P4 ≥ v3.1; board dùng P4 v1.0 → giữ `CONFIG_ESP32P4_SELECTS_REV_LESS_V3=y` trong sdkconfig của board. |
 
 Driver/BSP gốc của hãng nằm ở [`boards/jc8012p4a1c/vendor/`](../platform/esp32/boards/jc8012p4a1c/vendor/README.md) (chỉ build `esp_lcd_jd9365` + `esp_lcd_touch_gsl3680`).
+
+## 8. Cài app & xem log qua cáp (debug bridge)
+
+Không cần rút thẻ SD: `tools/gach install appstore/dist/<id>.gapp`, xem log bằng `tools/gach logcat`,
+shell tương tác `tools/gach shell`. Chi tiết: [debug_bridge.md](debug_bridge.md).

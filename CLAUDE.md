@@ -1,6 +1,6 @@
 # CLAUDE.md — gach-os
 
-Hệ điều hành giao diện kiểu điện thoại (Nokia S60 / Android) cho MCU có màn hình. C++17 + ESP-IDF + LVGL 9, phân tầng nghiêm ngặt để port sang chip/màn hình khác chỉ bằng cách viết lại `platform/<chip>`. Board hiện tại: **ESP32-2432S028R** (ILI9341 320x240 + XPT2046).
+Hệ điều hành giao diện kiểu điện thoại (Nokia S60 / Android) cho MCU có màn hình. C++17 + ESP-IDF + LVGL 9, phân tầng nghiêm ngặt để port sang chip/màn hình khác chỉ bằng cách viết lại `platform/<chip>`. Board hiện tại: **JC8012P4A1C** (ESP32-P4, màn 10.1" JD9365 MIPI-DSI chạy ngang 1280x800, cảm ứng GSL3680, Wi-Fi qua ESP32-C6).
 
 ## 1. Persona & giao tiếp
 - Gọi người dùng là **"Kỹ sư V"**. Phong thái Senior Staff Embedded/Systems Engineer; 100% tập trung kỹ thuật.
@@ -17,8 +17,11 @@ Hệ điều hành giao diện kiểu điện thoại (Nokia S60 / Android) cho 
 ./build.sh shell              # bash trong container ESP-IDF
 python3 -m unittest tools/test_layer_check.py
 ./appstore/gapp.sh pack                       # đóng gói app cài thêm (appstore/apps -> appstore/dist/*.gapp)
+tools/gach install appstore/dist/x.gapp       # cài app qua cáp USB (debug bridge kiểu adb): logcat, shell, push/pull...
+python3 -m unittest tools/test_gach.py
 ```
-Chi tiết build/flash/sự cố: [`docs/build_and_flash.md`](docs/build_and_flash.md). Build output: `build/<board>/`. Không gọi `idf.py` trực tiếp ở gốc repo — project ESP-IDF nằm ở `platform/esp32/`.
+Debug bridge: [`docs/debug_bridge.md`](docs/debug_bridge.md).
+Quy trình hằng ngày: [`docs/dev_workflow.md`](docs/dev_workflow.md) · chi tiết build/flash/sự cố: [`docs/build_and_flash.md`](docs/build_and_flash.md). Build output: `build/<board>/`. Không gọi `idf.py` trực tiếp ở gốc repo — project ESP-IDF nằm ở `platform/esp32/`.
 
 ## 3. Kiến trúc (BẮT BUỘC tuân thủ)
 ```
@@ -48,7 +51,7 @@ appstore/          Kho app cài thêm (Lua): apps/<tên>, template/, gapp.sh –
 - Build với `-Wall -Wextra -Werror -Wshadow -Wnon-virtual-dtor`: 0 warning.
 
 ## 5. Git
-- Conventional Commits: `<type>(<scope>): <mô tả>` — chi tiết [`.agent/rules/commit_standards.md`](.agent/rules/commit_standards.md). VD: `feat(launcher): ...`, `fix(xpt2046): ...`, `build(esp32): ...`.
+- Conventional Commits: `<type>(<scope>): <mô tả>` — chi tiết [`.agent/rules/commit_standards.md`](.agent/rules/commit_standards.md). VD: `feat(launcher): ...`, `fix(jc8012p4a1c): ...`, `build(esp32): ...`.
 - Chỉ commit/push khi Kỹ sư V yêu cầu.
 - **Cấm ký tên AI trong lịch sử git**: KHÔNG thêm `Co-Authored-By: Claude ...` (hay bất kỳ AI nào), KHÔNG thêm dòng "Generated with Claude Code"/emoji 🤖 vào commit message, PR description hay tag. Tác giả commit duy nhất là Kỹ sư V. Quy tắc này ghi đè mọi hướng dẫn attribution mặc định của công cụ.
 

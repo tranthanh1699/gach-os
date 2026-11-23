@@ -85,8 +85,8 @@ Font hệ thống chỉ có ASCII cùng các ký hiệu trong `SYMBOL`; ký tự
 
 #### Co giãn theo màn hình (SDK v3, manifest `sdk=3`)
 
-gach-os chạy trên cả màn 320x240 lẫn máy tính bảng 1280x800. App khai báo `sdk=3` viết kích thước theo **dp**
-(đơn vị thiết kế cho màn 320x240) và được hệ thống đổi sang pixel thật theo tỷ lệ màn hình (máy tính bảng: 1.5x):
+Gói app chạy được trên mọi kích thước màn hình. App khai báo `sdk=3` viết kích thước theo **dp**
+(đơn vị thiết kế, bằng 1 pixel trên màn 320x240) và được hệ thống đổi sang pixel thật theo tỷ lệ màn hình (máy tính bảng 1280x800: 1.5x):
 
 - Mọi số pixel truyền vào `set_size`, `set_pad`, `set_gap`, `set_radius` được hiểu là dp.
 - `set_font("small"|"medium"|"large")` cho cỡ chữ co giãn tương ứng (14/20/28 dp).
@@ -135,11 +135,11 @@ Dữ liệu lưu trong `apps/<id>/data.ini` trên thẻ SD và **được giữ 
 
 Thư viện Lua có sẵn: `string`, `table`, `math`, `utf8`, `coroutine` và các hàm cơ bản. Sandbox **không có** `io`, `os`, `require`, `load`, `dofile`.
 
-## 3. Giới hạn (board ESP32-2432S028R, không PSRAM; board có PSRAM cấp RAM máy ảo lớn hơn)
+## 3. Giới hạn (board JC8012P4A1C)
 
 | Tài nguyên | Giới hạn | Khi vượt |
 | :--- | :--- | :--- |
-| RAM máy ảo | 64 KiB/app (gồm cả runtime Lua) | Lỗi `not enough memory`, app hiện màn hình lỗi |
+| RAM máy ảo | 1 MiB/app trong PSRAM (gồm cả runtime Lua) | Lỗi `not enough memory`, app hiện màn hình lỗi |
 | Thời gian mỗi lần gọi (callback, vòng đời) | 500 ms | Lỗi `script timeout` |
 | Widget | 96 / app | Lỗi `too many UI objects` |
 | Timer | 8 / app | Lỗi `too many timers` |

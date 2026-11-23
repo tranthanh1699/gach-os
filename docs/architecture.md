@@ -116,7 +116,7 @@ Shell / app ◄── fw::TimeService::now(): UTC + múi giờ (mặc định UT
 ```
 Thẻ SD: install/*.gapp ──(boot hoặc app "Apps")──► kiểm tra manifest ─► giải nén ─► apps/<id>/
                                                                                       │ đăng ký slot ScriptApp
-Launcher ──launch──► ScriptApp (fw::App, exclusive) ──► ScriptHost: lua_newstate trên arena 64 KiB
+Launcher ──launch──► ScriptApp (fw::App, exclusive) ──► ScriptHost: lua_newstate trên arena do board cấp (1 MiB PSRAM)
                                                           ├─ gach.ui / timer / sys / storage / app
                                                           ├─ handle số nguyên ↔ lv_obj_t* (không lộ con trỏ)
                                                           ├─ ngân sách 500 ms/lần gọi (hook đếm lệnh)
