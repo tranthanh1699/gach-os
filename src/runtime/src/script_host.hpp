@@ -39,8 +39,8 @@ public:
 
     ScriptHost();
 
-    /** @brief Gắn filesystem và vùng nhớ (từ hal::Devices). */
-    void bind(hal::IFileSystem* p_fs, const hal::MemoryRegion& arena);
+    /** @brief Gắn filesystem, vùng nhớ và HTTP client (từ hal::Devices; p_http có thể NULL). */
+    void bind(hal::IFileSystem* p_fs, const hal::MemoryRegion& arena, hal::IHttpClient* p_http);
 
     /** @return true nếu máy ảo đang chạy một app. */
     bool is_busy() const { return m_p_lua != nullptr; }
@@ -80,6 +80,7 @@ private:
 
     static void on_lv_event(lv_event_t* p_event);
     static void on_timer(lv_timer_t* p_timer);
+    static void on_net_poll(lv_timer_t* p_timer);
     static void async_fault(void* p_arg);
     static void async_exit(void* p_arg);
     static void timeout_hook(lua_State* p_lua, lua_Debug* p_debug);
@@ -95,6 +96,9 @@ private:
     lv_obj_t* m_objects[MAX_OBJECTS];
     int m_refs[MAX_OBJECTS];
     TimerSlot m_timers[MAX_TIMERS];
+    hal::IHttpClient* m_p_http;
+    lv_timer_t* m_p_net_timer; /**< Hỏi trạng thái yêu cầu gach.net.get đang chạy. */
+    int m_net_ref;             /**< Callback Lua của yêu cầu đang chạy. */
     int m_app_ref;
     hal::FileHandle m_load_handle;
     uint32_t m_deadline;

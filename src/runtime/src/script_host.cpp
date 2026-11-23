@@ -86,6 +86,306 @@ constexpr int32_t CHART_MAX_SERIES = 4;
 constexpr uint32_t CHART_HOR_DIV_LINES = 3U;
 constexpr uint32_t MS_PER_S = 1000U;
 
+// ---- SDK v5: mạng & JSON ----
+constexpr uint32_t NET_POLL_MS = 50U;
+constexpr int JSON_MAX_DEPTH = 32;
+constexpr int JSON_STACK_SLOTS = 4;
+constexpr uint32_t UTF8_1BYTE_MAX = 0x7FU;
+constexpr uint32_t UTF8_2BYTE_MAX = 0x7FFU;
+constexpr uint32_t UTF8_3BYTE_MAX = 0xFFFFU;
+constexpr uint32_t SURROGATE_HIGH_MIN = 0xD800U;
+constexpr uint32_t SURROGATE_HIGH_MAX = 0xDBFFU;
+constexpr uint32_t SURROGATE_LOW_MIN = 0xDC00U;
+constexpr uint32_t SURROGATE_LOW_MAX = 0xDFFFU;
+constexpr uint32_t SURROGATE_BASE = 0x10000U;
+constexpr uint32_t SURROGATE_SHIFT = 10U;
+constexpr int HEX_DIGITS = 4;
+
+/**
+ * @brief Bộ giải mã JSON -> giá trị Lua (object -> table, array -> table 1..n, null -> nil).
+ *
+ * Đệ quy có giới hạn độ sâu; lỗi trả false kèm vị trí, stack Lua do người gọi dọn.
+ */
+class JsonDecoder {
+public:
+    JsonDecoder(lua_State* p_lua, const char* p_text, size_t len)
+        : m_p_lua(p_lua), m_p_begin(p_text), m_p_pos(p_text), m_p_end(p_text + len), m_p_error(nullptr)
+    {
+    }
+
+    bool decode()
+    {
+        if (!value(0)) {
+            return false;
+        }
+        skip_space();
+        return (m_p_pos == m_p_end) || fail("trailing characters");
+    }
+
+    const char* error() const { return (m_p_error != nullptr) ? m_p_error : "invalid JSON"; }
+    size_t offset() const { return static_cast<size_t>(m_p_pos - m_p_begin); }
+
+private:
+    bool fail(const char* p_message)
+    {
+        m_p_error = p_message;
+        return false;
+    }
+
+    void skip_space()
+    {
+        while ((m_p_pos < m_p_end) &&
+               ((*m_p_pos == ' ') || (*m_p_pos == '\t') || (*m_p_pos == '\n') || (*m_p_pos == '\r'))) {
+            ++m_p_pos;
+        }
+    }
+
+    bool literal(const char* p_word)
+    {
+        const size_t len = std::strlen(p_word);
+        if ((static_cast<size_t>(m_p_end - m_p_pos) < len) || (std::memcmp(m_p_pos, p_word, len) != 0)) {
+            return fail("invalid literal");
+        }
+        m_p_pos += len;
+        return true;
+    }
+
+    bool value(int depth)
+    {
+        if ((depth > JSON_MAX_DEPTH) || !lua_checkstack(m_p_lua, JSON_STACK_SLOTS)) {
+            return fail("nesting too deep");
+        }
+        skip_space();
+        if (m_p_pos >= m_p_end) {
+            return fail("unexpected end");
+        }
+        switch (*m_p_pos) {
+        case '{':
+            return object(depth);
+        case '[':
+            return array(depth);
+        case '"':
+            return string();
+        case 't':
+            lua_pushboolean(m_p_lua, 1);
+            return literal("true");
+        case 'f':
+            lua_pushboolean(m_p_lua, 0);
+            return literal("false");
+        case 'n':
+            lua_pushnil(m_p_lua);
+            return literal("null");
+        default:
+            return number();
+        }
+    }
+
+    bool object(int depth)
+    {
+        ++m_p_pos; // '{'
+        lua_newtable(m_p_lua);
+        skip_space();
+        if ((m_p_pos < m_p_end) && (*m_p_pos == '}')) {
+            ++m_p_pos;
+            return true;
+        }
+        for (;;) {
+            skip_space();
+            if ((m_p_pos >= m_p_end) || (*m_p_pos != '"') || !string()) {
+                return fail("expected key");
+            }
+            skip_space();
+            if ((m_p_pos >= m_p_end) || (*m_p_pos != ':')) {
+                return fail("expected ':'");
+            }
+            ++m_p_pos;
+            if (!value(depth + 1)) {
+                return false;
+            }
+            lua_rawset(m_p_lua, -3);
+            skip_space();
+            if ((m_p_pos < m_p_end) && (*m_p_pos == ',')) {
+                ++m_p_pos;
+            } else if ((m_p_pos < m_p_end) && (*m_p_pos == '}')) {
+                ++m_p_pos;
+                return true;
+            } else {
+                return fail("expected ',' or '}'");
+            }
+        }
+    }
+
+    bool array(int depth)
+    {
+        ++m_p_pos; // '['
+        lua_newtable(m_p_lua);
+        skip_space();
+        if ((m_p_pos < m_p_end) && (*m_p_pos == ']')) {
+            ++m_p_pos;
+            return true;
+        }
+        for (lua_Integer index = 1;; ++index) {
+            if (!value(depth + 1)) {
+                return false;
+            }
+            lua_rawseti(m_p_lua, -2, index);
+            skip_space();
+            if ((m_p_pos < m_p_end) && (*m_p_pos == ',')) {
+                ++m_p_pos;
+            } else if ((m_p_pos < m_p_end) && (*m_p_pos == ']')) {
+                ++m_p_pos;
+                return true;
+            } else {
+                return fail("expected ',' or ']'");
+            }
+        }
+    }
+
+    bool hex4(uint32_t& out)
+    {
+        if ((m_p_end - m_p_pos) < HEX_DIGITS) {
+            return fail("bad \\u escape");
+        }
+        out = 0U;
+        for (int i = 0; i < HEX_DIGITS; ++i) {
+            const char c = *m_p_pos++;
+            uint32_t digit = 0U;
+            if ((c >= '0') && (c <= '9')) {
+                digit = static_cast<uint32_t>(c - '0');
+            } else if ((c >= 'a') && (c <= 'f')) {
+                digit = static_cast<uint32_t>(c - 'a') + 10U;
+            } else if ((c >= 'A') && (c <= 'F')) {
+                digit = static_cast<uint32_t>(c - 'A') + 10U;
+            } else {
+                return fail("bad \\u escape");
+            }
+            out = (out << 4U) | digit;
+        }
+        return true;
+    }
+
+    static void add_utf8(luaL_Buffer& buf, uint32_t cp)
+    {
+        if (cp <= UTF8_1BYTE_MAX) {
+            luaL_addchar(&buf, static_cast<char>(cp));
+        } else if (cp <= UTF8_2BYTE_MAX) {
+            luaL_addchar(&buf, static_cast<char>(0xC0U | (cp >> 6U)));
+            luaL_addchar(&buf, static_cast<char>(0x80U | (cp & 0x3FU)));
+        } else if (cp <= UTF8_3BYTE_MAX) {
+            luaL_addchar(&buf, static_cast<char>(0xE0U | (cp >> 12U)));
+            luaL_addchar(&buf, static_cast<char>(0x80U | ((cp >> 6U) & 0x3FU)));
+            luaL_addchar(&buf, static_cast<char>(0x80U | (cp & 0x3FU)));
+        } else {
+            luaL_addchar(&buf, static_cast<char>(0xF0U | (cp >> 18U)));
+            luaL_addchar(&buf, static_cast<char>(0x80U | ((cp >> 12U) & 0x3FU)));
+            luaL_addchar(&buf, static_cast<char>(0x80U | ((cp >> 6U) & 0x3FU)));
+            luaL_addchar(&buf, static_cast<char>(0x80U | (cp & 0x3FU)));
+        }
+    }
+
+    bool escape(luaL_Buffer& buf)
+    {
+        const char c = *m_p_pos++;
+        switch (c) {
+        case '"':
+        case '\\':
+        case '/':
+            luaL_addchar(&buf, c);
+            return true;
+        case 'b':
+            luaL_addchar(&buf, '\b');
+            return true;
+        case 'f':
+            luaL_addchar(&buf, '\f');
+            return true;
+        case 'n':
+            luaL_addchar(&buf, '\n');
+            return true;
+        case 'r':
+            luaL_addchar(&buf, '\r');
+            return true;
+        case 't':
+            luaL_addchar(&buf, '\t');
+            return true;
+        case 'u':
+            break;
+        default:
+            return fail("bad escape");
+        }
+        uint32_t cp = 0U;
+        if (!hex4(cp)) {
+            return false;
+        }
+        if ((cp >= SURROGATE_HIGH_MIN) && (cp <= SURROGATE_HIGH_MAX) && ((m_p_end - m_p_pos) >= 2) &&
+            (m_p_pos[0] == '\\') && (m_p_pos[1] == 'u')) {
+            m_p_pos += 2;
+            uint32_t low = 0U;
+            if (!hex4(low)) {
+                return false;
+            }
+            if ((low >= SURROGATE_LOW_MIN) && (low <= SURROGATE_LOW_MAX)) {
+                cp = SURROGATE_BASE + ((cp - SURROGATE_HIGH_MIN) << SURROGATE_SHIFT) + (low - SURROGATE_LOW_MIN);
+            }
+        }
+        add_utf8(buf, cp);
+        return true;
+    }
+
+    bool string()
+    {
+        ++m_p_pos; // '"'
+        luaL_Buffer buf;
+        luaL_buffinit(m_p_lua, &buf);
+        while (m_p_pos < m_p_end) {
+            const char c = *m_p_pos++;
+            if (c == '"') {
+                luaL_pushresult(&buf);
+                return true;
+            }
+            if (c != '\\') {
+                luaL_addchar(&buf, c);
+            } else if ((m_p_pos >= m_p_end) || !escape(buf)) {
+                return fail("bad escape");
+            } else {
+                // Đã thêm ký tự thoát.
+            }
+        }
+        return fail("unterminated string");
+    }
+
+    bool number()
+    {
+        const char* const p_start = m_p_pos;
+        bool is_integer = true;
+        while ((m_p_pos < m_p_end) && (std::strchr("+-0123456789.eE", *m_p_pos) != nullptr)) {
+            if ((*m_p_pos == '.') || (*m_p_pos == 'e') || (*m_p_pos == 'E')) {
+                is_integer = false;
+            }
+            ++m_p_pos;
+        }
+        if (m_p_pos == p_start) {
+            return fail("unexpected character");
+        }
+        char* p_stop = nullptr;
+        const double value = std::strtod(p_start, &p_stop); // Chuỗi Lua luôn kết thúc '\0'.
+        if (p_stop != m_p_pos) {
+            return fail("bad number");
+        }
+        if (is_integer && (value >= static_cast<double>(INT32_MIN)) && (value <= static_cast<double>(INT32_MAX))) {
+            lua_pushinteger(m_p_lua, static_cast<lua_Integer>(value));
+        } else {
+            lua_pushnumber(m_p_lua, static_cast<lua_Number>(value));
+        }
+        return true;
+    }
+
+    lua_State* const m_p_lua;
+    const char* const m_p_begin;
+    const char* m_p_pos;
+    const char* const m_p_end;
+    const char* m_p_error;
+};
+
 ScriptHost* host_of(lua_State* p_lua)
 {
     return *static_cast<ScriptHost**>(lua_getextraspace(p_lua));
@@ -946,6 +1246,72 @@ struct ScriptHost::Sdk {
         return 1;
     }
 
+    /** @brief gach.ui.set_pos(h, x, y): vị trí tuyệt đối (dp) trong cha KHÔNG có bố cục (box) – SDK v5. */
+    static int set_pos(lua_State* p_lua)
+    {
+        lv_obj_t* const p_obj = object(p_lua, 1);
+        lv_obj_set_pos(p_obj, to_px(p_lua, luaL_checkinteger(p_lua, 2)), to_px(p_lua, luaL_checkinteger(p_lua, 3)));
+        return 0;
+    }
+
+    // ---- gach.net / gach.json (SDK v5) ----
+    /**
+     * @brief gach.net.get(url, fn) -> true | nil, lý do.
+     *
+     * fn(code, body, truncated) chạy trên UI khi xong: code = mã HTTP, hoặc 0 khi lỗi mạng (body = lý do).
+     */
+    static int net_get(lua_State* p_lua)
+    {
+        ScriptHost* const p_host = host_of(p_lua);
+        if ((p_host->m_manifest.permissions & PERMISSION_NETWORK) == 0U) {
+            return luaL_error(p_lua, "permission 'network' not declared in manifest");
+        }
+        const char* const p_url = luaL_checkstring(p_lua, 1);
+        luaL_checktype(p_lua, 2, LUA_TFUNCTION);
+        hal::IHttpClient* const p_http = p_host->m_p_http;
+        const char* p_reason = nullptr;
+        if (p_http == nullptr) {
+            p_reason = "not supported";
+        } else if (p_host->m_p_services->wifi().status() != fw::WifiStatus::CONNECTED) {
+            p_reason = "offline";
+        } else if (p_host->m_net_ref != LUA_NOREF) {
+            p_reason = "busy";
+        } else {
+            p_http->release(); // Kết quả mồ côi của app trước (đã đóng khi yêu cầu còn chạy).
+            const common::Status status = p_http->start_get(p_url);
+            luaL_argcheck(p_lua, status != common::Status::ERR_PARAM, 1, "url empty or too long");
+            if (status != common::Status::OK) {
+                p_reason = "busy";
+            }
+        }
+        if (p_reason != nullptr) {
+            lua_pushnil(p_lua);
+            lua_pushstring(p_lua, p_reason);
+            return 2;
+        }
+        lua_pushvalue(p_lua, 2);
+        p_host->m_net_ref = luaL_ref(p_lua, LUA_REGISTRYINDEX);
+        p_host->m_p_net_timer = lv_timer_create(&ScriptHost::on_net_poll, NET_POLL_MS, p_host);
+        lua_pushboolean(p_lua, 1);
+        return 1;
+    }
+
+    /** @brief gach.json.decode(text) -> value | nil, "lỗi tại vị trí n". */
+    static int json_decode(lua_State* p_lua)
+    {
+        size_t len = 0U;
+        const char* const p_text = luaL_checklstring(p_lua, 1, &len);
+        const int top = lua_gettop(p_lua);
+        JsonDecoder decoder(p_lua, p_text, len);
+        if (decoder.decode()) {
+            return 1;
+        }
+        lua_settop(p_lua, top);
+        lua_pushnil(p_lua);
+        lua_pushfstring(p_lua, "%s at offset %d", decoder.error(), static_cast<int>(decoder.offset()));
+        return 2;
+    }
+
     static void add_table(lua_State* p_lua, const char* p_name, const luaL_Reg* p_funcs)
     {
         lua_newtable(p_lua);
@@ -985,11 +1351,15 @@ struct ScriptHost::Sdk {
                                       {"bar", bar},           {"arc", arc},           {"chart", chart},
                                       {"chart_series", chart_series}, {"chart_push", chart_push},
                                       {"set_value", set_value}, {"set_accent", set_accent},
+                                      // SDK v5
+                                      {"set_pos", set_pos},
                                       {nullptr, nullptr}};
         static const luaL_Reg TIMER[] = {{"every", timer_every}, {"cancel", timer_cancel}, {nullptr, nullptr}};
         static const luaL_Reg SYS[] = {{"uptime_ms", uptime_ms}, {"time", time}, {"stats", stats}, {nullptr, nullptr}};
         static const luaL_Reg STORAGE[] = {{"get", storage_get}, {"set", storage_set}, {nullptr, nullptr}};
         static const luaL_Reg APP[] = {{"exit", app_exit}, {nullptr, nullptr}};
+        static const luaL_Reg NET[] = {{"get", net_get}, {nullptr, nullptr}};
+        static const luaL_Reg JSON[] = {{"decode", json_decode}, {nullptr, nullptr}};
         lua_newtable(p_lua);
         add_table(p_lua, "ui", UI);
         (void)lua_getfield(p_lua, -1, "ui");
@@ -1000,6 +1370,8 @@ struct ScriptHost::Sdk {
         add_table(p_lua, "sys", SYS);
         add_table(p_lua, "storage", STORAGE);
         add_table(p_lua, "app", APP);
+        add_table(p_lua, "net", NET);
+        add_table(p_lua, "json", JSON);
         lua_pushinteger(p_lua, SDK_VERSION);
         lua_setfield(p_lua, -2, "sdk_version");
         lua_setglobal(p_lua, "gach");
@@ -1025,16 +1397,18 @@ struct ScriptHost::Sdk {
 // ============================================================================
 ScriptHost::ScriptHost()
     : m_p_fs(nullptr), m_arena{nullptr, 0U}, m_p_lua(nullptr), m_p_apps(nullptr), m_p_services(nullptr),
-      m_p_root(nullptr), m_manifest{}, m_objects{}, m_refs{}, m_timers{}, m_app_ref(LUA_NOREF),
+      m_p_root(nullptr), m_manifest{}, m_objects{}, m_refs{}, m_timers{}, m_p_http(nullptr), m_p_net_timer(nullptr),
+      m_net_ref(LUA_NOREF), m_app_ref(LUA_NOREF),
       m_load_handle(hal::INVALID_FILE), m_deadline(0U), m_in_call(false), m_faulted(false), m_exit_pending(false),
       m_exiting(false), m_error{}
 {
 }
 
-void ScriptHost::bind(hal::IFileSystem* p_fs, const hal::MemoryRegion& arena)
+void ScriptHost::bind(hal::IFileSystem* p_fs, const hal::MemoryRegion& arena, hal::IHttpClient* p_http)
 {
     m_p_fs = p_fs;
     m_arena = arena;
+    m_p_http = p_http;
 }
 
 common::Status ScriptHost::start(const Manifest& manifest, lv_obj_t* p_root, fw::AppManager& apps,
@@ -1229,6 +1603,12 @@ void ScriptHost::fault(const char* p_message)
 
 void ScriptHost::close_vm()
 {
+    // Yêu cầu HTTP đang chạy vẫn tiếp tục ở platform; kết quả bị bỏ ở lần gach.net.get kế tiếp.
+    if (m_p_net_timer != nullptr) {
+        lv_timer_delete(m_p_net_timer);
+        m_p_net_timer = nullptr;
+    }
+    m_net_ref = LUA_NOREF;
     for (TimerSlot& slot : m_timers) {
         if (slot.p_timer != nullptr) {
             lv_timer_delete(slot.p_timer);
@@ -1332,6 +1712,38 @@ void ScriptHost::invoke_text(int ref, const char* p_arg)
     lua_rawgeti(m_p_lua, LUA_REGISTRYINDEX, ref);
     lua_pushstring(m_p_lua, p_arg);
     (void)protected_call(1, 0);
+}
+
+void ScriptHost::on_net_poll(lv_timer_t* p_timer)
+{
+    auto* const p_self = static_cast<ScriptHost*>(lv_timer_get_user_data(p_timer));
+    hal::IHttpClient* const p_http = p_self->m_p_http;
+    if ((p_http == nullptr) || (p_http->state() != hal::HttpState::DONE) || p_self->m_in_call) {
+        return;
+    }
+    lv_timer_delete(p_timer);
+    p_self->m_p_net_timer = nullptr;
+    const int ref = p_self->m_net_ref;
+    p_self->m_net_ref = LUA_NOREF;
+    if ((p_self->m_p_lua == nullptr) || p_self->m_faulted || (ref == LUA_NOREF)) {
+        p_http->release();
+        return;
+    }
+    lua_State* const p_lua = p_self->m_p_lua;
+    const hal::HttpResult result = p_http->result();
+    lua_rawgeti(p_lua, LUA_REGISTRYINDEX, ref);
+    luaL_unref(p_lua, LUA_REGISTRYINDEX, ref);
+    if (result.status == common::Status::OK) {
+        lua_pushinteger(p_lua, static_cast<lua_Integer>(result.http_code));
+        lua_pushlstring(p_lua, reinterpret_cast<const char*>(p_http->body()), result.body_len); // Copy vào arena.
+        lua_pushboolean(p_lua, result.truncated ? 1 : 0);
+    } else {
+        lua_pushinteger(p_lua, 0);
+        lua_pushstring(p_lua, (result.status == common::Status::ERR_TIMEOUT) ? "timeout" : "network error");
+        lua_pushboolean(p_lua, 0);
+    }
+    p_http->release();
+    (void)p_self->protected_call(3, 0);
 }
 
 void ScriptHost::on_timer(lv_timer_t* p_timer)

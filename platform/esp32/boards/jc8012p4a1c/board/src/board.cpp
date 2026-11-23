@@ -7,6 +7,7 @@
 #include "board_config.hpp"
 #include "drivers/pwm_backlight.hpp"
 #include "esp32_mcal/esp32_clock.hpp"
+#include "esp32_mcal/esp32_http_client.hpp"
 #include "esp32_mcal/esp32_nvs_store.hpp"
 #include "esp32_mcal/esp32_pwm.hpp"
 #include "esp32_mcal/esp32_sd_filesystem.hpp"
@@ -31,6 +32,7 @@ esp32_mcal::Esp32System s_system;
 esp32_mcal::Esp32NvsStore s_storage;
 esp32_mcal::Esp32Wifi s_wifi;
 esp32_mcal::Esp32Clock s_clock;
+esp32_mcal::Esp32HttpClient s_http;
 esp32_mcal::Esp32UartDebugPort s_debug_port; // Cáp USB-serial: tool `gach` (debug bridge).
 
 // Panel/touch gắn chặt SDK (MIPI-DSI, PPA, esp_lcd_touch) -> hiện thực ở board, không ở drivers/.
@@ -131,6 +133,9 @@ const Devices& board_init()
     if (wifi_ok) {
         s_devices.p_wifi = &s_wifi;
         s_devices.p_clock = &s_clock; // SNTP cần netif do Wi-Fi khởi tạo.
+        if (optional(s_http.init(HTTP_BODY_BYTES), "HTTP client")) {
+            s_devices.p_http = &s_http;
+        }
     }
 
     ESP_LOGI(TAG, "%s ready (%ux%u, sd=%s, wifi=%s)", BOARD_NAME, static_cast<unsigned>(s_display.width()),

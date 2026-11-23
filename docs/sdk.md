@@ -1,4 +1,4 @@
-# gach SDK (v4): viết app cài thêm cho gach-os
+# gach SDK (v5): viết app cài thêm cho gach-os
 
 App cài thêm là một **gói `.gapp`** chứa mã Lua 5.4, tương tự file `.jar` trên Nokia S60 hay `.apk` trên Android. Gói chạy trong máy ảo có sandbox, nên cùng một gói chạy được trên mọi board gach-os, bất kể chip hay kích thước màn hình.
 
@@ -21,7 +21,7 @@ sdk=1                     # bắt buộc. Phiên bản SDK tối thiểu app c�
 entry=main.lua            # tùy chọn (mặc định main.lua).
 icon=bell                 # tùy chọn. Xem bảng icon bên dưới.
 color=#E3B341             # tùy chọn. Màu nền icon.
-permissions=storage       # tùy chọn. Danh sách cách nhau bằng dấu phẩy.
+permissions=storage       # tùy chọn: storage, network (SDK v5). Cách nhau bằng dấu phẩy.
 ```
 
 Icon hỗ trợ: `audio video list settings home image play bell gps file edit envelope call keyboard charge folder tint eye wifi shuffle loop`.
@@ -115,6 +115,12 @@ Kích thước tính theo dp như SDK v3.
 | `set_value(h, value)` | Đổi giá trị `bar` / `arc` / `slider` |
 | `set_accent(h, 0xRRGGBB)` | Màu phần chỉ thị của `bar` / `arc` / `slider` (VD: đổi sang đỏ khi vượt ngưỡng) |
 
+#### Vị trí tuyệt đối (SDK v5, manifest `sdk=5`)
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `set_pos(h, x, y)` | Đặt góc trên trái (dp) **trong một `box`** (box không tự bố cục). Trong `row`/`column` vị trí do bố cục quyết định, lệnh không có tác dụng. Dùng để ghép hình: VD icon đám mây = 3 `box` bo tròn chồng lên nhau (xem app Weather) |
+
 ### gach.timer
 
 | Hàm | Mô tả |
@@ -148,6 +154,32 @@ Kích thước tính bằng byte; số vượt 2^31 (VD: dung lượng thẻ SD)
 | `temp` | Nhiệt độ chip (°C, số thực) |
 | `fps` | Số lần màn hình vẽ lại mỗi giây kể từ lần gọi trước (màn hình đứng yên thì gần 0) |
 | `wifi` | `{connected, ssid, ip?, rssi?}` (`rssi` dBm); `nil` nếu board không có Wi-Fi |
+
+### gach.net (SDK v5, cần `permissions=network`)
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `get(url, fn) -> true \| nil, lý do` | Gửi HTTP(S) GET **không chặn**. Khi xong, `fn(code, body, truncated)` chạy trên UI: `code` = mã HTTP (VD 200), `body` = nội dung (chuỗi); lỗi mạng/TLS/timeout thì `code = 0` và `body` = lý do. Lý do không gửi được: `"offline"` (chưa có Wi-Fi), `"busy"` (đang có yêu cầu khác), `"not supported"` (board không có mạng) |
+
+- Mỗi lúc **một** yêu cầu: gửi yêu cầu tiếp theo trong callback của yêu cầu trước.
+- HTTPS kiểm tra chứng chỉ máy chủ bằng bộ CA dựng sẵn; timeout 15 s; tự theo tối đa 3 lần chuyển hướng.
+- Phản hồi tối đa 64 KiB (board JC8012P4A1C); dài hơn thì `truncated = true` và `body` chỉ là phần đầu.
+- URL tối đa 511 ký tự. Đóng app khi yêu cầu đang chạy: callback bị bỏ, không lỗi.
+
+### gach.json (SDK v5)
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `decode(text) -> value \| nil, lỗi` | JSON -> Lua: object -> table khóa chuỗi, array -> table 1..n, `null` -> `nil`, số nguyên vừa 32 bit -> integer, còn lại -> số thực. Độ sâu tối đa 32. Lỗi cú pháp trả `nil, "<lỗi> at offset <n>"` |
+
+```lua
+gach.net.get("https://api.open-meteo.com/v1/forecast?latitude=21.03&longitude=105.85&current=temperature_2m",
+  function(code, body)
+    if code ~= 200 then print("lỗi", code, body) return end
+    local data = gach.json.decode(body)
+    print(data.current.temperature_2m)
+  end)
+```
 
 ### gach.storage (cần `permissions=storage`)
 
@@ -208,6 +240,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 - [`appstore/apps/counter`](../appstore/apps/counter): UI, sự kiện, timer, `gach.storage`.
 - [`appstore/apps/world_clock`](../appstore/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
 - [`appstore/apps/game2048`](../appstore/apps/game2048) (SDK v3): game 2048 với `on_swipe`, bàn cờ vuông co giãn theo màn hình, lưu ván đang chơi và điểm cao nhất.
+- [`appstore/apps/weather`](../appstore/apps/weather) (SDK v5): thời tiết qua Wi-Fi (Open-Meteo): nhiệt độ, cảm giác như, độ ẩm, gió, UV, xác suất mưa, dự báo theo giờ / 7 ngày, mặt trời mọc/lặn. Dùng `net.get`, `json.decode`, icon vẽ bằng `box` + `set_pos`.
 - [`appstore/apps/sysmon`](../appstore/apps/sysmon) (SDK v4): System Monitor. Dashboard tải CPU từng core, RAM/PSRAM/heap LVGL, firmware/thẻ SD, nhiệt độ, Wi-Fi, cập nhật mỗi giây bằng `gach.sys.stats()` cùng `arc`, `bar`, `chart`.
 - [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v3): máy tính kiểu điện thoại / máy tính bảng. Dùng `screen_size()` để chọn bố cục (màn rộng có thêm phím khoa học và lịch sử), lưu lịch sử bằng `gach.storage` dạng bộ đệm vòng, và vẽ ký hiệu `÷` bằng `box`.
 
@@ -219,6 +252,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 | 2 | Bố cục & kiểu dáng: `box`, `set_size`, `set_grow`, `set_bg`, `set_radius`, `set_align`, `set_pad`, `set_gap`, `center`, `SYMBOL` |
 | 3 | Co giãn theo màn hình: app `sdk=3` dùng dp và font co giãn; `screen_size`, `on_swipe` (vuốt) |
 | 4 | `sys.stats()` (CPU, bộ nhớ, lưu trữ, nhiệt độ, Wi-Fi); widget `bar`, `arc`, `chart` + `chart_series`/`chart_push`, `set_value`, `set_accent` |
+| 5 | `net.get` (HTTP/HTTPS, quyền `network`), `json.decode`, `ui.set_pos` |
 
 - Runtime từ chối gói có `sdk` lớn hơn `gach.sdk_version` của máy.
 - API đã phát hành **không bao giờ bị xóa hay đổi nghĩa**; SDK mới chỉ thêm API. App viết cho `sdk=1` chạy được trên mọi bản gach-os về sau.

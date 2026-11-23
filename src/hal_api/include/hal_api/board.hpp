@@ -13,6 +13,7 @@
 #include "hal_api/debug_port.hpp"
 #include "hal_api/display.hpp"
 #include "hal_api/filesystem.hpp"
+#include "hal_api/http.hpp"
 #include "hal_api/storage.hpp"
 #include "hal_api/system.hpp"
 #include "hal_api/touch.hpp"
@@ -47,6 +48,7 @@ struct Devices {
      * có lợi khi IDisplay hỗ trợ flush bất đồng bộ). Càng lớn càng ít lần chia nhỏ màn hình khi vẽ lại.
      */
     MemoryRegion draw_buffers[DRAW_BUFFER_COUNT];
+    IHttpClient* p_http; /**< Tùy chọn: HTTP(S) cho app (cần mạng, VD Wi-Fi). */
 };
 
 /**
