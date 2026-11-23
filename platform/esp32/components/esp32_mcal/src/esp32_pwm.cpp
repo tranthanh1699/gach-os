@@ -25,7 +25,6 @@ common::Status Esp32PwmChannel::init(const PwmConfig& cfg)
     ch_cfg.gpio_num = cfg.pin;
     ch_cfg.speed_mode = LEDC_LOW_SPEED_MODE;
     ch_cfg.channel = cfg.channel;
-    ch_cfg.intr_type = LEDC_INTR_DISABLE;
     ch_cfg.timer_sel = cfg.timer;
     ch_cfg.duty = 0U;
     ch_cfg.hpoint = 0;
