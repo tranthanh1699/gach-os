@@ -33,10 +33,26 @@ struct PerfStats {
 void perf_snapshot(PerfStats& out, bool reset);
 
 /**
- * @brief Benchmark: vẽ lại toàn màn hình `rounds` lần ngay lập tức, trả số liệu của riêng các lần đó.
- *        Gọi khi giữ UiLock. Chặn UI trong lúc chạy (~rounds x thời gian một khung).
+ * @brief Đặt lịch benchmark: task UI vẽ lại toàn màn `rounds` lần (vẽ luôn chạy trên stack của task UI).
+ *        Gọi khi giữ UiLock; đọc kết quả bằng perf_bench_result() sau khi nhả khóa.
  */
-void perf_bench(uint32_t rounds, PerfStats& out);
+void perf_bench_start(uint32_t rounds);
+
+/**
+ * @brief Kết quả benchmark (gọi khi giữ UiLock).
+ * @return true nếu đã xong (out hợp lệ), false nếu còn đang chạy / chưa đặt lịch.
+ */
+bool perf_bench_result(PerfStats& out);
+
+/** @brief Chẩn đoán task UI, đọc KHÔNG cần UiLock (dùng được khi UI đang treo). */
+struct UiDiag {
+    uint32_t loop_count;     /**< Số vòng lặp UI đã chạy. */
+    uint32_t phase;          /**< 0 ngủ, 1 lv_timer_handler, 2 vẽ, 3 flush, 4 đọc touch. */
+    uint32_t phase_since_ms; /**< Thời điểm vào phase hiện tại. */
+};
+
+/** @param[out] out Trạng thái task UI hiện tại. */
+void ui_diag(UiDiag& out);
 
 /** @return App manager toàn cục – dùng để đăng ký app trước khi start(). */
 AppManager& app_manager();

@@ -17,6 +17,7 @@ tools/gach pull apps/foo/data.ini -             # lấy file về (- = in ra std
 tools/gach ls apps | rm <path> | mkdir <dir> | info | mem | reboot
 tools/gach launch settings | home | back      # điều khiển app từ xa (test tự động)
 tools/gach perf bench                           # đo vẽ lại toàn màn 20 lần (fps, thời gian khung)
+# trong gach shell: uidiag – trạng thái task UI không cần khóa (vòng lặp, phase, đứng bao lâu) khi nghi UI treo
 ```
 
 - Cổng mặc định `/dev/ttyUSB0`; đổi bằng `-p /dev/ttyACM0` hoặc biến `GACH_PORT`.

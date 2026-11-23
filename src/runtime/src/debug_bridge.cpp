@@ -166,7 +166,7 @@ void cmd_help(uint8_t id)
 {
     send_text(id, "info | mem | apps | ls [dir] | mkdir <dir> | rm <path>");
     send_text(id, "push <path> <size> | pull <path> | install | uninstall <id> | reboot");
-    send_text(id, "launch <app_id> | back | home | perf [reset|bench]");
+    send_text(id, "launch <app_id> | back | home | perf [reset|bench] | uidiag");
     send_resp(id, true, nullptr);
 }
 
@@ -445,13 +445,27 @@ void cmd_perf(uint8_t id, const char* p_arg)
     const bool is_reset = (p_arg != nullptr) && (std::strcmp(p_arg, "reset") == 0);
     const bool is_bench = (p_arg != nullptr) && (std::strcmp(p_arg, "bench") == 0);
     constexpr uint32_t BENCH_ROUNDS = 20U;
-    {
-        fw::UiLock lock;
-        if (is_bench) {
-            fw::perf_bench(BENCH_ROUNDS, stats);
-        } else {
-            fw::perf_snapshot(stats, is_reset);
+    constexpr uint32_t BENCH_POLL_MS = 50U;
+    constexpr uint32_t BENCH_TIMEOUT_MS = 15000U;
+    if (is_bench) {
+        // Vẽ phải chạy trên stack của task UI (stack bridge nhỏ): đặt lịch rồi chờ ngoài khóa.
+        {
+            fw::UiLock lock;
+            fw::perf_bench_start(BENCH_ROUNDS);
         }
+        bool is_done = false;
+        for (uint32_t waited = 0U; !is_done && (waited < BENCH_TIMEOUT_MS); waited += BENCH_POLL_MS) {
+            osal::delay_ms(BENCH_POLL_MS);
+            fw::UiLock lock;
+            is_done = fw::perf_bench_result(stats);
+        }
+        if (!is_done) {
+            send_resp(id, false, "bench timeout");
+            return;
+        }
+    } else {
+        fw::UiLock lock;
+        fw::perf_snapshot(stats, is_reset);
     }
     constexpr uint32_t US_PER_MS = 1000U;
     constexpr uint32_t MS_PER_S = 1000U;
@@ -531,6 +545,14 @@ void on_command(const Frame& frame)
         cmd_launch(id, p_arg1);
     } else if ((std::strcmp(p_cmd, "home") == 0) || (std::strcmp(p_cmd, "back") == 0)) {
         cmd_navigate(id, std::strcmp(p_cmd, "home") == 0);
+    } else if (std::strcmp(p_cmd, "uidiag") == 0) {
+        fw::UiDiag diag{};
+        fw::ui_diag(diag); // Không khóa: đọc được cả khi UI treo.
+        char text[TEXT_BUF_LEN];
+        (void)std::snprintf(text, sizeof(text), "loops=%u phase=%u for=%ums", static_cast<unsigned>(diag.loop_count),
+                            static_cast<unsigned>(diag.phase),
+                            static_cast<unsigned>(osal::tick_ms() - diag.phase_since_ms));
+        send_resp(id, true, text);
     } else if (std::strcmp(p_cmd, "perf") == 0) {
         cmd_perf(id, p_arg1);
     } else if (std::strcmp(p_cmd, "reboot") == 0) {

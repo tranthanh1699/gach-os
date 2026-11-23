@@ -19,6 +19,15 @@ uint32_t s_render_start_us = 0U;
 
 } // namespace
 
+volatile uint32_t s_diag_phase = DIAG_PHASE_IDLE;
+volatile uint32_t s_diag_phase_ms = 0U;
+
+void diag_set_phase(uint32_t phase)
+{
+    s_diag_phase = phase;
+    s_diag_phase_ms = osal::tick_ms();
+}
+
 LvglPort::LvglPort()
     : m_p_display(nullptr), m_p_touch(nullptr), m_p_lv_display(nullptr), m_p_lv_indev(nullptr), m_swap_bytes(false),
       m_is_async(false),
@@ -78,6 +87,7 @@ void LvglPort::flush_cb(lv_display_t* p_disp, const lv_area_t* p_area, uint8_t* 
         lv_draw_sw_rgb565_swap(p_px_map, lv_area_get_size(p_area));
     }
     const hal::Area area{p_area->x1, p_area->y1, p_area->x2, p_area->y2};
+    diag_set_phase(DIAG_PHASE_FLUSH);
     const uint32_t start_us = osal::time_us();
     if (p_self->m_is_async) {
         // Trả về ngay: LVGL vẽ dải kế tiếp vào buffer kia; on_flush_done (ISR) báo flush_ready.
@@ -108,6 +118,7 @@ void LvglPort::touch_read_cb(lv_indev_t* p_indev, lv_indev_data_t* p_data)
 {
     auto* const p_self = static_cast<LvglPort*>(lv_indev_get_user_data(p_indev));
     hal::TouchPoint point{};
+    diag_set_phase(DIAG_PHASE_TOUCH);
     const bool is_pressed = common::is_ok(p_self->m_p_touch->read(point)) && point.pressed;
     if (is_pressed) {
         p_self->m_last_point.x = static_cast<int32_t>(point.x);
@@ -120,6 +131,7 @@ void LvglPort::touch_read_cb(lv_indev_t* p_indev, lv_indev_data_t* p_data)
 void LvglPort::render_event_cb(lv_event_t* p_event)
 {
     if (lv_event_get_code(p_event) == LV_EVENT_RENDER_START) {
+        diag_set_phase(DIAG_PHASE_RENDER);
         s_render_start_us = osal::time_us();
         return;
     }
@@ -139,20 +151,44 @@ void perf_snapshot(PerfStats& out, bool reset)
     }
 }
 
-void perf_bench(uint32_t rounds, PerfStats& out)
+uint32_t s_bench_rounds = 0U;
+bool s_bench_done = false;
+PerfStats s_bench_result{};
+
+/** @brief Chạy trong task UI (lv_timer): vẽ lại toàn màn N lần, lưu số liệu riêng của các lần đó. */
+void bench_timer_cb(lv_timer_t* p_timer)
 {
+    (void)p_timer;
     const PerfStats saved = s_perf;
     const uint32_t saved_start = s_perf_window_start_ms;
     s_perf = PerfStats{};
     s_perf_window_start_ms = osal::tick_ms();
     lv_display_t* const p_disp = lv_display_get_default();
-    for (uint32_t round = 0U; (p_disp != nullptr) && (round < rounds); ++round) {
+    for (uint32_t round = 0U; (p_disp != nullptr) && (round < s_bench_rounds); ++round) {
         lv_obj_invalidate(lv_screen_active());
         lv_refr_now(p_disp);
     }
-    perf_snapshot(out, false);
+    perf_snapshot(s_bench_result, false);
     s_perf = saved; // Không làm lệch cửa sổ đo đang chạy của `perf`.
     s_perf_window_start_ms = saved_start;
+    s_bench_done = true;
+}
+
+void perf_bench_start(uint32_t rounds)
+{
+    s_bench_rounds = rounds;
+    s_bench_done = false;
+    lv_timer_t* const p_timer = lv_timer_create(&bench_timer_cb, 0U, nullptr);
+    lv_timer_set_repeat_count(p_timer, 1); // Một lần rồi tự xóa.
+}
+
+bool perf_bench_result(PerfStats& out)
+{
+    if (!s_bench_done) {
+        return false;
+    }
+    out = s_bench_result;
+    return true;
 }
 
 uint32_t LvglPort::tick_cb()

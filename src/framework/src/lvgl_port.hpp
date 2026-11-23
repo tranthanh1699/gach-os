@@ -14,6 +14,16 @@
 
 namespace fw {
 
+// Chẩn đoán task UI (đọc bởi ui_diag() không cần khóa).
+constexpr uint32_t DIAG_PHASE_IDLE = 0U;
+constexpr uint32_t DIAG_PHASE_HANDLER = 1U;
+constexpr uint32_t DIAG_PHASE_RENDER = 2U;
+constexpr uint32_t DIAG_PHASE_FLUSH = 3U;
+constexpr uint32_t DIAG_PHASE_TOUCH = 4U;
+extern volatile uint32_t s_diag_phase;
+extern volatile uint32_t s_diag_phase_ms;
+void diag_set_phase(uint32_t phase);
+
 /** @brief Gắn display/touch của HAL vào LVGL. Chỉ có 1 instance (tĩnh) trong framework. */
 class LvglPort : private common::NonCopyable {
 public:

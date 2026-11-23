@@ -204,6 +204,9 @@ bool Jd9365Display::on_ppa_done(ppa_client_handle_t p_client, ppa_event_data_t* 
     (void)p_client;
     (void)p_event;
     auto* const p_self = static_cast<Jd9365Display*>(p_user_data);
+    if (p_self == nullptr) {
+        return false; // IDF gọi callback cả cho phép chặn (user_data = NULL): không có gì phải báo.
+    }
     const hal::FlushDoneCallback on_done = p_self->m_on_done;
     p_self->m_on_done = nullptr;
     if (on_done != nullptr) {
