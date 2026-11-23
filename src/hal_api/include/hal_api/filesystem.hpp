@@ -32,7 +32,8 @@ enum class OpenMode : uint8_t {
 struct DirEntry {
     char name[FS_NAME_MAX_LEN + 1U];
     bool is_dir;
-    uint32_t size; /**< Byte (0 với thư mục). */
+    uint32_t size;  /**< Byte (0 với thư mục). Chỉ có giá trị với list_dir_detailed()/stat(). */
+    uint32_t mtime; /**< Lần sửa cuối, giây UTC kể từ 1970 (0 = không rõ). Như size. */
 };
 
 /**
@@ -75,6 +76,38 @@ public:
 
     /** @brief Xóa file hoặc thư mục RỖNG. */
     virtual common::Status remove(const char* p_path) = 0;
+
+    /**
+     * @brief Như list_dir() nhưng điền cả size và mtime (chậm hơn: một lần stat mỗi mục).
+     * @note  Mặc định: gọi list_dir() (size/mtime = 0).
+     */
+    virtual common::Status list_dir_detailed(const char* p_path, DirCallback callback, void* p_ctx)
+    {
+        return list_dir(p_path, callback, p_ctx);
+    }
+
+    /**
+     * @brief Thông tin một file / thư mục.
+     * @param[out] entry name = phần cuối đường dẫn, is_dir, size, mtime.
+     * @return ERR_NOT_FOUND nếu không tồn tại, ERR_NOT_SUPPORTED nếu không hỗ trợ.
+     */
+    virtual common::Status stat(const char* p_path, DirEntry& entry)
+    {
+        (void)p_path;
+        (void)entry;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+
+    /**
+     * @brief Đổi tên / di chuyển trong cùng hệ thống file (đích không được tồn tại).
+     * @return ERR_STATE nếu đích đã tồn tại, ERR_NOT_SUPPORTED nếu không hỗ trợ.
+     */
+    virtual common::Status rename(const char* p_from, const char* p_to)
+    {
+        (void)p_from;
+        (void)p_to;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
 
     /**
      * @brief Dung lượng phân vùng (byte).

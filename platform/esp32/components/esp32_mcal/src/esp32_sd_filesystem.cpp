@@ -4,6 +4,7 @@
  */
 #include "esp32_mcal/esp32_sd_filesystem.hpp"
 
+#include <cstdio>
 #include <cstring>
 #include <dirent.h>
 #include <sys/stat.h>
@@ -182,7 +183,7 @@ bool Esp32SdFileSystem::exists(const char* p_path, bool& is_dir)
     is_dir = false;
     char native[NATIVE_PATH_LEN];
     struct stat info {};
-    if (!m_is_mounted || !to_native(p_path, native, sizeof(native)) || (stat(native, &info) != 0)) {
+    if (!m_is_mounted || !to_native(p_path, native, sizeof(native)) || (::stat(native, &info) != 0)) {
         return false;
     }
     is_dir = S_ISDIR(info.st_mode);
@@ -249,6 +250,79 @@ common::Status Esp32SdFileSystem::get_capacity(uint64_t& total_bytes, uint64_t& 
     }
     return (esp_vfs_fat_info(MOUNT_POINT, &total_bytes, &free_bytes) == ESP_OK) ? common::Status::OK
                                                                                  : common::Status::ERR_IO;
+}
+
+namespace {
+void fill_from_stat(const struct stat& info, hal::DirEntry& entry)
+{
+    entry.is_dir = S_ISDIR(info.st_mode);
+    entry.size = entry.is_dir ? 0U : static_cast<uint32_t>(info.st_size);
+    entry.mtime = (info.st_mtime > 0) ? static_cast<uint32_t>(info.st_mtime) : 0U;
+}
+} // namespace
+
+common::Status Esp32SdFileSystem::list_dir_detailed(const char* p_path, hal::DirCallback callback, void* p_ctx)
+{
+    char native[NATIVE_PATH_LEN];
+    if (!m_is_mounted || (callback == nullptr) || !to_native(p_path, native, sizeof(native))) {
+        return common::Status::ERR_PARAM;
+    }
+    DIR* const p_dir = opendir(native);
+    if (p_dir == nullptr) {
+        return common::Status::ERR_NOT_FOUND;
+    }
+    const size_t dir_len = std::strlen(native);
+    char child[NATIVE_PATH_LEN + hal::FS_NAME_MAX_LEN + 2U];
+    for (const struct dirent* p_ent = readdir(p_dir); p_ent != nullptr; p_ent = readdir(p_dir)) {
+        if ((std::strcmp(p_ent->d_name, ".") == 0) || (std::strcmp(p_ent->d_name, "..") == 0) ||
+            (std::strlen(p_ent->d_name) > hal::FS_NAME_MAX_LEN)) {
+            continue;
+        }
+        hal::DirEntry entry{};
+        (void)std::snprintf(entry.name, sizeof(entry.name), "%s", p_ent->d_name);
+        entry.is_dir = (p_ent->d_type == DT_DIR);
+        (void)std::snprintf(child, sizeof(child), "%.*s/%s", static_cast<int>(dir_len), native, p_ent->d_name);
+        struct stat info {};
+        if (::stat(child, &info) == 0) {
+            fill_from_stat(info, entry);
+        }
+        if (!callback(entry, p_ctx)) {
+            break;
+        }
+    }
+    (void)closedir(p_dir);
+    return common::Status::OK;
+}
+
+common::Status Esp32SdFileSystem::stat(const char* p_path, hal::DirEntry& entry)
+{
+    entry = hal::DirEntry{};
+    char native[NATIVE_PATH_LEN];
+    if (!m_is_mounted || !to_native(p_path, native, sizeof(native))) {
+        return common::Status::ERR_PARAM;
+    }
+    struct stat info {};
+    if (::stat(native, &info) != 0) {
+        return common::Status::ERR_NOT_FOUND;
+    }
+    const char* const p_slash = std::strrchr(p_path, '/');
+    (void)std::snprintf(entry.name, sizeof(entry.name), "%s", (p_slash != nullptr) ? (p_slash + 1) : p_path);
+    fill_from_stat(info, entry);
+    return common::Status::OK;
+}
+
+common::Status Esp32SdFileSystem::rename(const char* p_from, const char* p_to)
+{
+    char from[NATIVE_PATH_LEN];
+    char to[NATIVE_PATH_LEN];
+    if (!m_is_mounted || !to_native(p_from, from, sizeof(from)) || !to_native(p_to, to, sizeof(to))) {
+        return common::Status::ERR_PARAM;
+    }
+    struct stat info {};
+    if (::stat(to, &info) == 0) {
+        return common::Status::ERR_STATE; // Không ghi đè.
+    }
+    return (std::rename(from, to) == 0) ? common::Status::OK : common::Status::ERR_IO;
 }
 
 } // namespace esp32_mcal
