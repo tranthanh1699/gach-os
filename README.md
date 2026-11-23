@@ -16,7 +16,7 @@ Nền tảng: **ESP-IDF** · **LVGL 9** · **C++17** · build bằng **Docker** 
 
 | Hạng mục | Trạng thái |
 | :--- | :--- |
-| Board | ESP32-2432S028R ("Cheap Yellow Display") – ILI9341 320x240, XPT2046 |
+| Board | ESP32-2432S028R ("Cheap Yellow Display") – ILI9341 320x240, XPT2046 (mặc định)<br>JC8012P4A1C – ESP32-P4 10.1" JD9365 MIPI-DSI 800x1280 chạy ngang 1280x800, GSL3680, Wi-Fi qua ESP32-C6 (`-b jc8012p4a1c`) |
 | Framework | AppManager (vòng đời + back-stack), Shell (status bar + nav bar), Services (Wi-Fi, thời gian), LVGL port |
 | Ứng dụng | Launcher nhiều trang (vuốt ngang), Apps, Stopwatch, Touch test, System info, Settings (Wi-Fi, độ sáng, múi giờ) |
 | App cài thêm | Gói `.gapp` (Lua 5.4, gach SDK v2) cài từ thẻ SD (tối đa 32 app), app **Apps** quản lý cài/gỡ, sandbox + giới hạn RAM/thời gian – [docs/sdk.md](docs/sdk.md) |
@@ -34,7 +34,7 @@ Nền tảng: **ESP-IDF** · **LVGL 9** · **C++17** · build bằng **Docker** 
 
 Hướng dẫn đầy đủ (cài đặt, flash, xử lý sự cố): **[docs/build_and_flash.md](docs/build_and_flash.md)**.
 
-Docker: user cần thuộc group `docker` (`sudo usermod -aG docker $USER`, đăng nhập lại). Image `gach-os-idf` (dựa trên `espressif/idf:v5.4.1`) được build tự động lần đầu.
+Docker: user cần thuộc group `docker` (`sudo usermod -aG docker $USER`, đăng nhập lại). Image `gach-os-idf` (dựa trên `espressif/idf:v6.1.1`) được build tự động lần đầu.
 
 ## Cấu trúc
 
@@ -51,6 +51,7 @@ src/                        Code portable (không biết chip)
 platform/esp32/             ESP-IDF project cho họ ESP32
   components/esp32_mcal/    MCAL bằng ESP-IDF (SPI, GPIO, LEDC, system)
   boards/esp32_2432s028/    Pin map, hiệu chuẩn, composition root
+  boards/jc8012p4a1c/       ESP32-P4 10.1": panel DSI + xoay PPA, touch GSL3680, vendor/ (BSP gốc của hãng)
   main/                     app_main()
 tools/                      layer_matrix.json, layer_check.py (+ test), gapp_pack.py
 appstore/                   Kho app cài thêm: apps/<tên> (calculator, counter, world_clock), gapp.sh

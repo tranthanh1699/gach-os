@@ -1,0 +1,7 @@
+## Phụ thuộc riêng board JC8012P4A1C.
+dependencies:
+  # Driver touch của hãng (vendor/esp_lcd_touch_gsl3680) viết cho esp_lcd_touch 1.x.
+  espressif/esp_lcd_touch: "1.1.2"
+  # Driver panel bản registry (hỗ trợ ESP-IDF 6). Logic giống hệt bản vendor 1.0.2; chuỗi init riêng của
+  # panel 10.1" lấy từ vendor và truyền qua init_cmds (board/src/jd9365_init_cmds.c).
+  espressif/esp_lcd_jd9365: "2.0.2"
