@@ -4,7 +4,7 @@
  */
 #include "settings_app.hpp"
 
-#include "alert.hpp"
+#include "framework/system_ui.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -561,9 +561,9 @@ void SettingsApp::on_restart_clicked(lv_event_t* p_event)
     if (p_self->m_p_dialog != nullptr) {
         return;
     }
-    p_self->m_p_dialog = alert::show("Restart device?", "Open apps will be closed.",
-                                     alert::Action{"Cancel", alert::COLOR_CANCEL, &SettingsApp::on_dialog_cancel},
-                                     alert::Action{"Restart", alert::COLOR_DESTRUCTIVE, &SettingsApp::on_dialog_confirm},
+    p_self->m_p_dialog = fw::alert::show("Restart device?", "Open apps will be closed.",
+                                     fw::alert::Action{"Cancel", fw::alert::COLOR_CANCEL, &SettingsApp::on_dialog_cancel},
+                                     fw::alert::Action{"Restart", fw::alert::COLOR_DESTRUCTIVE, &SettingsApp::on_dialog_confirm},
                                      p_self);
 }
 

@@ -9,6 +9,7 @@
 #include "common/string_utils.hpp"
 #include "framework/list_view.hpp"
 #include "framework/services.hpp"
+#include "framework/system_ui.hpp"
 #include "framework/theme.hpp"
 #include "ui_helpers.hpp"
 
@@ -21,65 +22,16 @@ constexpr uint32_t REFRESH_PERIOD_MS = 500U;
 constexpr int32_t HEADER_BUTTON_SIZE = 36;
 constexpr size_t ITEM_TEXT_LEN = 64U;
 constexpr size_t STATUS_TEXT_LEN = 80U;
-// ---- Màn nhập mật khẩu (dp) – kiểu bàn phím iPad: ô nhập ở giữa phần trên, bàn phím cố định ở đáy ----
-constexpr uint32_t COLOR_KB_BG = 0x1C1C1EU;       /**< Nền bàn phím. */
-constexpr uint32_t COLOR_KEY = 0x4A4A4CU;         /**< Phím chữ. */
-constexpr uint32_t COLOR_KEY_SPECIAL = 0x2F2F31U; /**< Phím chức năng (shift, xóa, OK...). */
-constexpr uint32_t COLOR_KEY_PRESSED = 0x6E6E72U;
-constexpr uint32_t COLOR_FIELD_BG = 0x1C1C1EU;
-constexpr uint32_t COLOR_FIELD_BORDER = 0x3A3A3CU;
-constexpr uint32_t COLOR_ACCENT = 0x0A84FFU;
-constexpr uint32_t COLOR_HINT = 0x8E8E93U;
-constexpr int32_t KB_HEIGHT = 250;
-constexpr int32_t KB_PAD = 8;
-constexpr int32_t KB_KEY_GAP = 7;
-constexpr int32_t KB_KEY_RADIUS = 8;
+// ---- Màn nhập mật khẩu (dp) – ô nhập ở giữa phần trên, bàn phím hệ thống (fw::keyboard) ở đáy ----
+constexpr uint32_t COLOR_KEY_SPECIAL = fw::keyboard::COLOR_KEY_SPECIAL;
+constexpr uint32_t COLOR_ACCENT = fw::palette::ACCENT;
+constexpr int32_t KB_KEY_GAP = fw::keyboard::KEY_GAP;
 constexpr int32_t FORM_GAP = 14;
 constexpr int32_t FIELD_WIDTH = 420;
-constexpr int32_t FIELD_PAD = 12;
-constexpr int32_t FIELD_RADIUS = 10;
+constexpr int32_t FIELD_PAD = fw::keyboard::FIELD_PAD;
 constexpr int32_t ACTION_WIDTH = 120;
 constexpr int32_t ACTION_HEIGHT = 40;
 constexpr size_t TITLE_TEXT_LEN = 96U;
-
-void style_keyboard(lv_obj_t* p_kb)
-{
-    lv_obj_set_style_bg_color(p_kb, lv_color_hex(COLOR_KB_BG), LV_PART_MAIN);
-    lv_obj_set_style_bg_opa(p_kb, LV_OPA_COVER, LV_PART_MAIN);
-    lv_obj_set_style_border_width(p_kb, 0, LV_PART_MAIN);
-    lv_obj_set_style_radius(p_kb, 0, LV_PART_MAIN);
-    lv_obj_set_style_pad_all(p_kb, fw::theme::px(KB_PAD), LV_PART_MAIN);
-    lv_obj_set_style_pad_row(p_kb, fw::theme::px(KB_KEY_GAP), LV_PART_MAIN);
-    lv_obj_set_style_pad_column(p_kb, fw::theme::px(KB_KEY_GAP), LV_PART_MAIN);
-
-    lv_obj_set_style_bg_color(p_kb, lv_color_hex(COLOR_KEY), LV_PART_ITEMS);
-    lv_obj_set_style_bg_opa(p_kb, LV_OPA_COVER, LV_PART_ITEMS);
-    lv_obj_set_style_radius(p_kb, fw::theme::px(KB_KEY_RADIUS), LV_PART_ITEMS);
-    lv_obj_set_style_border_width(p_kb, 0, LV_PART_ITEMS);
-    lv_obj_set_style_shadow_width(p_kb, 0, LV_PART_ITEMS);
-    lv_obj_set_style_text_color(p_kb, lv_color_white(), LV_PART_ITEMS);
-    lv_obj_set_style_text_font(p_kb, fw::theme::font_medium(), LV_PART_ITEMS);
-    // Phím chức năng mang cờ CHECKED trong bản đồ phím của LVGL -> tô tối hơn như iOS.
-    lv_obj_set_style_bg_color(p_kb, lv_color_hex(COLOR_KEY_SPECIAL), static_cast<lv_style_selector_t>(LV_PART_ITEMS) | LV_STATE_CHECKED);
-    lv_obj_set_style_text_color(p_kb, lv_color_white(), static_cast<lv_style_selector_t>(LV_PART_ITEMS) | LV_STATE_CHECKED);
-    lv_obj_set_style_bg_color(p_kb, lv_color_hex(COLOR_KEY_PRESSED), static_cast<lv_style_selector_t>(LV_PART_ITEMS) | LV_STATE_PRESSED);
-}
-
-void style_field(lv_obj_t* p_field)
-{
-    lv_obj_set_width(p_field, fw::theme::px(FIELD_WIDTH));
-    lv_obj_set_style_bg_color(p_field, lv_color_hex(COLOR_FIELD_BG), 0);
-    lv_obj_set_style_bg_opa(p_field, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(p_field, fw::theme::px(FIELD_RADIUS), 0);
-    lv_obj_set_style_border_width(p_field, 1, 0);
-    lv_obj_set_style_border_color(p_field, lv_color_hex(COLOR_FIELD_BORDER), 0);
-    lv_obj_set_style_border_color(p_field, lv_color_hex(COLOR_ACCENT), LV_STATE_FOCUSED);
-    lv_obj_set_style_pad_all(p_field, fw::theme::px(FIELD_PAD), 0);
-    lv_obj_set_style_text_font(p_field, fw::theme::font_medium(), 0);
-    lv_obj_set_style_text_color(p_field, lv_color_white(), 0);
-    lv_obj_set_style_text_color(p_field, lv_color_hex(COLOR_HINT), LV_PART_TEXTAREA_PLACEHOLDER);
-    lv_obj_set_style_border_color(p_field, lv_color_hex(COLOR_ACCENT), LV_PART_CURSOR);
-}
 
 lv_obj_t* plain_row(lv_obj_t* p_parent, int32_t gap)
 {
@@ -291,7 +243,8 @@ void WifiApp::open_password_dialog()
 
     lv_obj_t* const p_field_row = plain_row(p_form, fw::theme::px(KB_KEY_GAP));
     m_p_password = lv_textarea_create(p_field_row);
-    style_field(m_p_password);
+    fw::keyboard::style_field(m_p_password);
+    lv_obj_set_width(m_p_password, fw::theme::px(FIELD_WIDTH));
     lv_textarea_set_one_line(m_p_password, true);
     lv_textarea_set_password_mode(m_p_password, true);
     lv_textarea_set_max_length(m_p_password, static_cast<uint32_t>(fw::WIFI_PASSWORD_BUF_LEN - 1U));
@@ -306,8 +259,8 @@ void WifiApp::open_password_dialog()
     (void)action_button(p_actions, "Join", COLOR_ACCENT, &WifiApp::on_join_clicked, this);
 
     lv_obj_t* const p_keyboard = lv_keyboard_create(m_p_dialog);
-    lv_obj_set_size(p_keyboard, LV_PCT(100), fw::theme::px(KB_HEIGHT));
-    style_keyboard(p_keyboard);
+    lv_obj_set_size(p_keyboard, LV_PCT(100), fw::theme::px(fw::keyboard::HEIGHT));
+    fw::keyboard::style(p_keyboard);
     lv_keyboard_set_textarea(p_keyboard, m_p_password);
     lv_obj_add_event_cb(p_keyboard, &WifiApp::on_keyboard_event, LV_EVENT_READY, this);
     lv_obj_add_event_cb(p_keyboard, &WifiApp::on_keyboard_event, LV_EVENT_CANCEL, this);

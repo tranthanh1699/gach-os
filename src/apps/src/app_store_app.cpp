@@ -4,7 +4,7 @@
  */
 #include "app_store_app.hpp"
 
-#include "alert.hpp"
+#include "framework/system_ui.hpp"
 
 #include <cstdio>
 
@@ -142,9 +142,9 @@ void AppStoreApp::confirm_uninstall(size_t index)
     (void)common::copy_string(m_selected_id, sizeof(m_selected_id), view.p_id);
     char title[TEXT_LEN] = {};
     (void)std::snprintf(title, sizeof(title), "Uninstall \"%s\"?", view.p_name);
-    m_p_dialog = alert::show(title, "The app and all of its data will be removed from this device.",
-                             alert::Action{"Cancel", alert::COLOR_CANCEL, &AppStoreApp::on_dialog_cancel},
-                             alert::Action{"Uninstall", alert::COLOR_DESTRUCTIVE, &AppStoreApp::on_uninstall_confirmed},
+    m_p_dialog = fw::alert::show(title, "The app and all of its data will be removed from this device.",
+                             fw::alert::Action{"Cancel", fw::alert::COLOR_CANCEL, &AppStoreApp::on_dialog_cancel},
+                             fw::alert::Action{"Uninstall", fw::alert::COLOR_DESTRUCTIVE, &AppStoreApp::on_uninstall_confirmed},
                              this);
 }
 
