@@ -6,6 +6,7 @@
 
 #include <cstring>
 
+#include "common/log.hpp"
 #include "common/string_utils.hpp"
 #include "hal_api/board.hpp"
 #include "storage_keys.hpp"
@@ -13,6 +14,7 @@
 namespace fw {
 
 namespace {
+constexpr const char* TAG = "wifi";
 
 WifiStatus to_status(hal::WifiState state)
 {
@@ -131,6 +133,9 @@ bool WifiService::poll()
 
     const WifiStatus previous = m_status;
     m_status = to_status(m_p_devices->p_wifi->state());
+    if (m_status != previous) {
+        log_transition(previous);
+    }
     const bool just_connected = (m_status == WifiStatus::CONNECTED) && (previous != WifiStatus::CONNECTED);
     if (just_connected && m_remember_pending) {
         save_credentials();
@@ -141,6 +146,30 @@ bool WifiService::poll()
         m_remember_pending = false;
     }
     return just_connected;
+}
+
+void WifiService::log_transition(WifiStatus previous) const
+{
+    char ip[IP_ADDRESS_BUF_LEN] = {};
+    switch (m_status) {
+    case WifiStatus::CONNECTED:
+        (void)ip_address(ip, sizeof(ip));
+        LOGI(TAG, "connected to '%s', ip %s", m_ssid, ip);
+        break;
+    case WifiStatus::FAILED:
+        LOGW(TAG, "connect to '%s' failed", m_ssid);
+        break;
+    case WifiStatus::DISCONNECTED:
+        if (previous == WifiStatus::CONNECTED) {
+            LOGI(TAG, "disconnected from '%s'", m_ssid);
+        }
+        break;
+    case WifiStatus::CONNECTING:
+        LOGI(TAG, "connecting to '%s'", m_ssid);
+        break;
+    default:
+        break;
+    }
 }
 
 void WifiService::refresh_networks()
@@ -165,6 +194,7 @@ void WifiService::refresh_networks()
         }
     }
     m_scan_generation++;
+    LOGD(TAG, "scan: %u network(s)", static_cast<unsigned>(m_network_count));
 }
 
 void WifiService::save_credentials()

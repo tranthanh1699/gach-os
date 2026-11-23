@@ -6,7 +6,15 @@
 
 #include <cstring>
 
+#include "common/log.hpp"
+#include "osal/osal.hpp"
+
 namespace fw {
+
+namespace {
+constexpr const char* TAG = "app";
+constexpr uint32_t US_PER_MS = 1000U;
+} // namespace
 
 AppManager::AppManager(Services& services)
     : m_context{*this, services}, m_p_apps{}, m_app_count(0U), m_registry_generation(0U), m_p_home(nullptr),
@@ -59,6 +67,7 @@ common::Status AppManager::set_home(const char* p_id)
 {
     App* const p_app = find(p_id);
     if (p_app == nullptr) {
+        LOGW(TAG, "launch: no app '%s'", (p_id != nullptr) ? p_id : "(null)");
         return common::Status::ERR_PARAM;
     }
     m_p_home = p_app;
@@ -164,10 +173,12 @@ App* AppManager::find(const char* p_id) const
 common::Status AppManager::push(App& app)
 {
     if (m_stack_depth >= config::MAX_APP_STACK) {
+        LOGW(TAG, "open %s: back stack full (%u)", app.info().p_id, static_cast<unsigned>(config::MAX_APP_STACK));
         return common::Status::ERR_FULL;
     }
     lv_obj_t* const p_root = lv_obj_create(m_p_content);
     if (p_root == nullptr) {
+        LOGE(TAG, "open %s: out of UI memory", app.info().p_id);
         return common::Status::ERR_NO_MEM;
     }
     lv_obj_remove_style_all(p_root);
@@ -182,9 +193,12 @@ common::Status AppManager::push(App& app)
     m_stack[m_stack_depth] = StackEntry{&app, p_root};
     m_stack_depth++;
 
+    const uint32_t start_us = osal::time_us();
     app.on_create(p_root);
     app.on_resume();
     notify_foreground();
+    LOGI(TAG, "open %s (%u ms, depth %u)", app.info().p_id,
+         static_cast<unsigned>((osal::time_us() - start_us) / US_PER_MS), static_cast<unsigned>(m_stack_depth));
     return common::Status::OK;
 }
 
@@ -192,6 +206,7 @@ void AppManager::pop_top()
 {
     m_stack_depth--;
     StackEntry& top = m_stack[m_stack_depth];
+    LOGI(TAG, "close %s", top.p_app->info().p_id);
     top.p_app->on_pause();
     top.p_app->on_destroy();
     // Xóa bất đồng bộ: an toàn khi back() được gọi từ chính event callback của app.

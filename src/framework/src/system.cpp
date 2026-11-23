@@ -8,6 +8,7 @@
  */
 #include "framework/system.hpp"
 
+#include "common/log.hpp"
 #include "framework/config.hpp"
 #include "framework/services.hpp"
 #include "framework/theme.hpp"
@@ -168,6 +169,13 @@ common::Status start(const hal::Devices& devices)
         status = s_ready.take(config::UI_START_TIMEOUT_MS) ? s_start_ctx.status : common::Status::ERR_TIMEOUT;
     }
     s_is_started = common::is_ok(status);
+    if (s_is_started) {
+        LOGI("fw", "UI started: %ux%u, scale %u%%, UI task on core %d", static_cast<unsigned>(devices.p_display->width()),
+             static_cast<unsigned>(devices.p_display->height()), static_cast<unsigned>(theme::scale_pct()),
+             static_cast<int>(config::UI_TASK_CORE));
+    } else {
+        LOGE("fw", "UI start failed (status=%u)", static_cast<unsigned>(status));
+    }
     return status;
 }
 

@@ -4,6 +4,7 @@
  */
 #include "framework/time_service.hpp"
 
+#include "common/log.hpp"
 #include "framework/config.hpp"
 #include "hal_api/board.hpp"
 #include "storage_keys.hpp"
@@ -100,7 +101,12 @@ common::Status TimeService::set_utc_offset_minutes(int32_t minutes)
 void TimeService::on_network_up()
 {
     if ((m_p_devices != nullptr) && (m_p_devices->p_clock != nullptr)) {
-        (void)m_p_devices->p_clock->start_sync(config::NTP_SERVER);
+        const common::Status status = m_p_devices->p_clock->start_sync(config::NTP_SERVER);
+        if (common::is_ok(status)) {
+            LOGI("time", "NTP sync started (%s)", config::NTP_SERVER);
+        } else {
+            LOGW("time", "NTP sync failed to start (status=%u)", static_cast<unsigned>(status));
+        }
     }
 }
 

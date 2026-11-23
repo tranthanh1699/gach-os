@@ -98,6 +98,7 @@ public:
 
 private:
     void refresh_networks();
+    void log_transition(WifiStatus previous) const;
     void save_credentials();
 
     const hal::Devices* m_p_devices;
