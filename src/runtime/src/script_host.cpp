@@ -274,6 +274,9 @@ struct ScriptHost::Sdk {
         luaL_argcheck(p_lua, p_host->m_refs[handle - 1] == LUA_NOREF, 1, "widget already has a callback");
         lv_obj_add_flag(p_obj, LV_OBJ_FLAG_CLICKABLE);
         lv_obj_remove_flag(p_obj, LV_OBJ_FLAG_SCROLLABLE);
+        // LVGL chuyển cử chỉ lên cha chừng nào còn GESTURE_BUBBLE (mặc định bật cho mọi object):
+        // tắt ở đây để cử chỉ dừng tại widget này thay vì trôi lên khung shell.
+        lv_obj_remove_flag(p_obj, LV_OBJ_FLAG_GESTURE_BUBBLE);
         lua_pushvalue(p_lua, 2);
         p_host->attach_callback(handle, luaL_ref(p_lua, LUA_REGISTRYINDEX), LV_EVENT_GESTURE);
         return 0;
@@ -531,11 +534,19 @@ struct ScriptHost::Sdk {
         return len;
     }
 
+    /**
+     * @brief Thời gian chờ thẻ SD là của hệ thống, không phải của script: cộng bù vào hạn 500 ms của lần gọi.
+     *        (Ghi FAT + đóng file có thể mất vài trăm ms -> app gọi storage vài lần sẽ bị "script timeout" oan.)
+     */
+    static void credit_io_time(ScriptHost& host, uint32_t start_ms) { host.m_deadline += osal::tick_ms() - start_ms; }
+
     static int storage_get(lua_State* p_lua)
     {
         require_storage(p_lua);
         const char* const p_key = luaL_checkstring(p_lua, 1);
+        const uint32_t io_start = osal::tick_ms();
         const size_t len = load_kv(*host_of(p_lua));
+        credit_io_time(*host_of(p_lua), io_start);
         size_t value_len = 0U;
         const char* const p_value = kv_find(s_kv_in, len, p_key, value_len);
         if (p_value == nullptr) {
@@ -558,6 +569,7 @@ struct ScriptHost::Sdk {
                       "value too long or contains newline");
 
         // Ghi lại mọi dòng trừ khóa cũ, rồi thêm khóa mới.
+        const uint32_t io_start = osal::tick_ms();
         const size_t in_len = load_kv(*p_host);
         const size_t key_len = std::strlen(p_key);
         size_t out_len = 0U;
@@ -597,6 +609,7 @@ struct ScriptHost::Sdk {
             status = p_host->m_p_fs->write(handle, reinterpret_cast<const uint8_t*>(s_kv_out), out_len);
             p_host->m_p_fs->close(handle); // Đóng file TRƯỚC mọi luaL_error.
         }
+        credit_io_time(*p_host, io_start);
         if (!common::is_ok(status)) {
             return luaL_error(p_lua, "storage write failed");
         }
