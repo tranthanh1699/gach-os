@@ -53,6 +53,12 @@ bool bridge_fs_command(uint8_t id, size_t argc, char* const p_args[], const hal:
  */
 bool bridge_diag_command(uint8_t id, size_t argc, char* const p_args[], const hal::Devices& devices);
 
+/**
+ * @brief Lệnh kho trực tuyến (`store url|refresh|list|install`).
+ * @return false nếu không phải lệnh `store`.
+ */
+bool bridge_store_command(uint8_t id, size_t argc, char* const p_args[]);
+
 /** @brief Gửi một dòng kết quả (khung TEXT) của lệnh id. */
 void bridge_text(uint8_t id, const char* p_text);
 

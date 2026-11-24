@@ -103,6 +103,62 @@ bool package_at(size_t index, PackageView& out);
  */
 common::Status install_pending(size_t& installed);
 
+// ============================================================================
+// Kho ứng dụng trực tuyến (danh mục index.tsv + gói .gapp trên máy chủ tĩnh, VD GitHub Pages)
+// ============================================================================
+constexpr size_t STORE_MAX_APPS = 64U;
+constexpr size_t STORE_URL_LEN = 160U;
+constexpr const char* STORE_DEFAULT_URL = "https://tranthanh1699.github.io/gach-os/"; /**< Kho mặc định. */
+
+/** @brief Một app trong danh mục của kho. */
+struct StoreApp {
+    char id[PACKAGE_ID_BUF_LEN];
+    char name[24];
+    char version[16];
+    char file[64];   /**< Tên gói trên máy chủ (cùng thư mục với index.tsv). */
+    char icon[16];
+    char sha256[65]; /**< Hex thường. */
+    uint32_t size;
+    uint32_t color;  /**< 0xRRGGBB. */
+    uint8_t sdk;
+};
+
+/** @brief Trạng thái việc đang chạy của kho. */
+enum class StoreState : uint8_t {
+    IDLE,          /**< Không có việc. */
+    LOADING_INDEX, /**< Đang tải danh mục. */
+    DOWNLOADING,   /**< Đang tải gói. */
+    DONE,          /**< Việc vừa xong thành công (store_message: kết quả). */
+    FAILED         /**< Việc vừa lỗi (store_message: lý do). */
+};
+
+/** @return Địa chỉ kho hiện tại (kết thúc bằng '/'). */
+const char* store_url();
+
+/** @brief Đổi địa chỉ kho (lưu NVS); NULL / "" = về mặc định. @return false nếu quá dài / sai dạng. */
+bool store_set_url(const char* p_url);
+
+/** @brief Bắt đầu tải danh mục <url>index.tsv. @return ERR_STATE nếu đang bận (kể cả gach.net của app). */
+common::Status store_refresh();
+
+/** @brief Bắt đầu tải + cài app thứ index của danh mục. */
+common::Status store_install(size_t index);
+
+/**
+ * @brief Tiến trình (gọi định kỳ trên UI task): xử lý kết quả tải, kiểm SHA-256, cài gói.
+ * @return Trạng thái sau khi xử lý; DONE / FAILED giữ tới lần refresh / install kế tiếp.
+ */
+StoreState store_poll();
+
+/** @brief Tiến độ tải gói (byte). */
+void store_progress(size_t& received, size_t& total);
+
+size_t store_count();
+const StoreApp& store_app(size_t index);
+
+/** @return Thông báo của việc gần nhất (lỗi hoặc kết quả), "" nếu không có. */
+const char* store_message();
+
 /** @brief Gỡ cài đặt (app phải đang không mở). */
 common::Status uninstall(const char* p_id);
 

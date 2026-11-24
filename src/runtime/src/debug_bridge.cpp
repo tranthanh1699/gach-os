@@ -198,6 +198,9 @@ const HelpEntry HELP[] = {
     {"apps", "app uninstall <id>", "remove an installed app and its data"},
     {"apps", "app permissions <id>", "what the app is allowed to use"},
     {"apps", "app logs <id> [n]", "last n log lines of an app (default 40)"},
+    {"store", "store list | store refresh", "apps in the online store (index.tsv) / reload the index"},
+    {"store", "store install <id>", "download, verify (SHA-256) and install an app from the store"},
+    {"store", "store url [url|default]", "show / change the store address (e.g. http://<pc-ip>:8000/)"},
     {"files", "cd [dir] | pwd", "change / show the current directory (/ = card root, .., ~)"},
     {"files", "ls [-l] [-a] [path]", "list a directory (-l details, -a hidden files)"},
     {"files", "mkdir [-p] <dir>", "create a directory (-p: with parents)"},
@@ -233,7 +236,7 @@ const HelpEntry HELP[] = {
     {"ui", "uidiag", "UI task state (works even when the UI hangs)"},
     {"legacy", "info | mem | apps | launch <id> | install | uninstall <id>", "older short forms"},
 };
-const char* const HELP_GROUPS[] = {"system", "memory", "tasks", "apps", "files", "logs", "diag", "ui", "legacy"};
+const char* const HELP_GROUPS[] = {"system", "memory", "tasks", "apps", "store", "files", "logs", "diag", "ui", "legacy"};
 
 /** @brief Từ thứ index (0-based) của chuỗi, phân cách bởi dấu cách; "" nếu không có. */
 void nth_word(const char* p_text, size_t index, char* p_out, size_t out_len)
@@ -772,6 +775,8 @@ void on_command(const Frame& frame)
         s_p_devices->p_system->restart();
     } else if (bridge_fs_command(id, argc, args, *s_p_devices)) {
         // Lệnh filesystem (bridge_fs.cpp) – thay ls / mkdir / rm cũ.
+    } else if (bridge_store_command(id, argc, args)) {
+        // Kho trực tuyến (bridge_store.cpp).
     } else if (bridge_app_command(id, argc, args, *s_p_devices)) {
         // Lệnh `app ...` (bridge_app.cpp).
     } else if (bridge_diag_command(id, argc, args, *s_p_devices)) {

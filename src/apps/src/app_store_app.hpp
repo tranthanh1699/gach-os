@@ -1,8 +1,7 @@
 /**
  * @file    app_store_app.hpp
- * @brief   [Private] Quản lý ứng dụng cài thêm: cài gói từ thẻ SD, xem danh sách, gỡ cài đặt.
- *
- * Nền móng cho kho ứng dụng: bước sau chỉ cần thêm nguồn tải (Wi-Fi) ghi gói vào install/.
+ * @brief   [Private] Quản lý ứng dụng cài thêm: kho trực tuyến (tải + cài qua Wi-Fi), cài gói từ thẻ SD, xem
+ *          danh sách, gỡ cài đặt.
  */
 #ifndef APPS_APP_STORE_APP_HPP
 #define APPS_APP_STORE_APP_HPP
@@ -30,6 +29,14 @@ private:
     void close_dialog();
 
     void change_page(int32_t delta);
+    void rebuild_store();
+    void store_item_clicked(size_t index);
+    void show_store_message();
+
+    static void on_mode_clicked(lv_event_t* p_event);
+    static void on_refresh_clicked(lv_event_t* p_event);
+    static void on_store_item_clicked(lv_event_t* p_event);
+    static void on_timer(lv_timer_t* p_timer);
 
     static void on_install_clicked(lv_event_t* p_event);
     static void on_prev_clicked(lv_event_t* p_event);
@@ -40,6 +47,12 @@ private:
 
     lv_obj_t* m_p_status;
     lv_obj_t* m_p_install_btn;
+    lv_obj_t* m_p_mode_btn;    /**< Chuyển Store <-> Installed. */
+    lv_obj_t* m_p_refresh_btn; /**< Tải lại danh mục kho. */
+    lv_timer_t* m_p_timer;     /**< Theo dõi việc tải của kho (chỉ khi app đang mở). */
+    bool m_store_mode;
+    bool m_store_loaded;
+    runtime::StoreState m_last_state;
     lv_obj_t* m_p_prev_btn;
     lv_obj_t* m_p_next_btn;
     size_t m_page; /**< Trang danh sách đang xem: chỉ dựng widget của một trang (giữ heap LVGL nhỏ). */

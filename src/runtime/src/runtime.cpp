@@ -17,6 +17,7 @@
 #include "package_archive.hpp"
 #include "script_app.hpp"
 #include "script_host.hpp"
+#include "store.hpp"
 
 namespace runtime {
 
@@ -261,6 +262,7 @@ common::Status init(const hal::Devices& devices, fw::AppManager& apps)
     s_p_fs = devices.p_fs;
     s_p_apps = &apps;
     s_host.bind(devices.p_fs, devices.app_arena, devices.asset_arena, devices.p_http);
+    store_init(devices);
     (void)make_dirs(*s_p_fs, APPS_DIR);
     (void)make_dirs(*s_p_fs, INSTALL_DIR);
 
