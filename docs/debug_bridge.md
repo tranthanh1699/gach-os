@@ -27,6 +27,7 @@ tools/gach top                                  # %CPU từng task, làm mới m
 tools/gach diagnose                             # health + crash + sổ lỗi + lỗi gần đây; xem docs/diagnostics.md
 tools/gach trace start; tools/gach trace export ui.json   # trace thời gian -> ui.perfetto.dev
 tools/gach crash dump                           # core dump lần crash gần nhất + backtrace
+tools/gach store list | store install <id>      # kho trực tuyến (GitHub Pages); store url <url|default> đổi kho
 # trong gach shell: uidiag – trạng thái task UI không cần khóa (vòng lặp, phase, đứng bao lâu) khi nghi UI treo
 ```
 

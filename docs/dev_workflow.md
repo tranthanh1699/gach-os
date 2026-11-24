@@ -163,6 +163,7 @@ Trong shell, `install <file>`, `push <local> <remote>`, `pull <remote> [local]` 
 | `stats` / `health` | Tổng hợp một màn / chấm điểm sức khỏe thiết bị (OK, INFO, WARN, BAD) |
 | `perf [reset\|bench]` | Hiệu năng vẽ: fps, thời gian khung, phần flush. `bench` = vẽ lại toàn màn 20 lần, in trung bình |
 | `log [n] [-l w]` / `log filter <text>` / `log tail` / `log export <file>` | Xem / lọc lịch sử log / chỉ log mới / lưu ra file |
+| `store list` / `store refresh` / `store install <id>` / `store url [url\|default]` | Kho trực tuyến: danh sách app (đã cài / có bản mới), tải + kiểm SHA-256 + cài, đổi địa chỉ kho (VD máy chủ LAN khi phát triển). Xem [appstore/README.md](../appstore/README.md) |
 | `diagnose` | Một báo cáo: health + crash + sổ lỗi + lỗi trong log + sự kiện gần đây + gợi ý |
 | `event list [n]` / `event monitor` | Sự kiện hệ thống (mở app, Wi-Fi, cài app, lỗi script, reset bất thường) |
 | `trace start\|stop\|status` / `trace export <file.json>` | Trace thời gian (render, flush, chạm, mở app) → ui.perfetto.dev |
