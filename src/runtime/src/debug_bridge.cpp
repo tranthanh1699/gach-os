@@ -232,6 +232,7 @@ const HelpEntry HELP[] = {
     {"diag", "crash dump [file]", "[pc] copy the core dump to the computer and decode it"},
     {"diag", "watchdog info", "task / interrupt watchdog settings"},
     {"ui", "home | back", "press Home / Back"},
+    {"ui", "screenshot [scale] [file.png]", "[pc] capture the screen (scale 1-8, default 4 = 320x200) to a PNG"},
     {"ui", "perf [reset|bench]", "redraw statistics / full-screen redraw benchmark"},
     {"ui", "uidiag", "UI task state (works even when the UI hangs)"},
     {"legacy", "info | mem | apps | launch <id> | install | uninstall <id>", "older short forms"},

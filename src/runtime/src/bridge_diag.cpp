@@ -389,6 +389,62 @@ void cmd_crash(uint8_t id, const char* p_sub, const char* p_confirm, const hal::
 }
 
 // ============================================================================
+// screenshot [scale]: chụp màn hình ra thẻ SD (tool tải về bằng pull, đổi sang PNG)
+// ============================================================================
+constexpr uint32_t SHOT_DEFAULT_SCALE = 4U;
+constexpr uint32_t SHOT_MAX_SCALE = 8U;
+constexpr size_t SHOT_MAX_WIDTH = 2048U;
+constexpr const char* SHOT_DIR = "screenshots";
+constexpr const char* SHOT_FILE = "screenshots/shot.gshot";
+
+uint16_t s_shot_row[SHOT_MAX_WIDTH];
+
+void cmd_screenshot(uint8_t id, const char* p_scale, const hal::Devices& dev)
+{
+    const uint32_t scale = (p_scale != nullptr) ? static_cast<uint32_t>(std::strtoul(p_scale, nullptr, 10))
+                                                : SHOT_DEFAULT_SCALE;
+    if ((scale == 0U) || (scale > SHOT_MAX_SCALE) || (dev.p_display == nullptr)) {
+        bridge_resp(id, false, "usage: screenshot [scale 1..8] (default 4)");
+        return;
+    }
+    if ((dev.p_fs == nullptr) || !dev.p_fs->is_mounted()) {
+        bridge_resp(id, false, "no SD card");
+        return;
+    }
+    const uint32_t out_w = dev.p_display->width() / scale;
+    const uint32_t out_h = dev.p_display->height() / scale;
+    if (out_w > SHOT_MAX_WIDTH) {
+        bridge_resp(id, false, "screen too wide");
+        return;
+    }
+    (void)make_dirs(*dev.p_fs, SHOT_DIR);
+    hal::FileHandle handle{};
+    if (!common::is_ok(dev.p_fs->open(SHOT_FILE, hal::OpenMode::WRITE, handle))) {
+        bridge_resp(id, false, "cannot create /screenshots/shot.gshot");
+        return;
+    }
+    // Header 8 byte: "GSHT", rộng u16, cao u16 (byte thấp trước); rồi các hàng RGB565.
+    const uint8_t header[] = {'G', 'S', 'H', 'T', static_cast<uint8_t>(out_w), static_cast<uint8_t>(out_w >> 8U),
+                              static_cast<uint8_t>(out_h), static_cast<uint8_t>(out_h >> 8U)};
+    common::Status status = dev.p_fs->write(handle, header, sizeof(header));
+    for (uint32_t row = 0U; common::is_ok(status) && (row < out_h); ++row) {
+        status = dev.p_display->read_row_scaled(row, scale, s_shot_row);
+        if (common::is_ok(status)) {
+            status = dev.p_fs->write(handle, reinterpret_cast<const uint8_t*>(s_shot_row), out_w * sizeof(uint16_t));
+        }
+    }
+    dev.p_fs->close(handle);
+    if (!common::is_ok(status)) {
+        (void)unsupported(id, status);
+        return;
+    }
+    char text[64];
+    (void)std::snprintf(text, sizeof(text), "/%s %ux%u", SHOT_FILE, static_cast<unsigned>(out_w),
+                        static_cast<unsigned>(out_h));
+    bridge_resp(id, true, text);
+}
+
+// ============================================================================
 // watchdog info
 // ============================================================================
 void cmd_watchdog(uint8_t id, const hal::Devices& dev)
@@ -436,6 +492,8 @@ bool bridge_diag_command(uint8_t id, size_t argc, char* const p_args[], const ha
         cmd_fault(id, p_a1);
     } else if (is("crash")) {
         cmd_crash(id, p_a1, p_a2, devices);
+    } else if (is("screenshot")) {
+        cmd_screenshot(id, p_a1, devices);
     } else if (is("watchdog")) {
         cmd_watchdog(id, devices);
     } else {

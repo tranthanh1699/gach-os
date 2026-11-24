@@ -57,6 +57,7 @@ public:
     uint16_t width() const override;
     uint16_t height() const override;
     hal::PixelFormat pixel_format() const override { return hal::PixelFormat::RGB565; }
+    common::Status read_row_scaled(uint32_t row, uint32_t scale, uint16_t* p_out) override;
     common::Status draw_bitmap(const hal::Area& area, const uint16_t* p_pixels) override;
     bool supports_async_flush() const override { return true; }
     common::Status draw_bitmap_async(const hal::Area& area, const uint16_t* p_pixels, hal::FlushDoneCallback on_done,

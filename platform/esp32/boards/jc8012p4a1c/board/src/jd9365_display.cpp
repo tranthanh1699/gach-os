@@ -10,6 +10,7 @@
 #include "jd9365_init_cmds.h"
 #include "esp_lcd_panel_ops.h"
 #include "esp_log.h"
+#include "esp_cache.h"
 #include "esp_private/esp_cache_private.h"
 #include "esp_heap_caps.h"
 
@@ -197,6 +198,27 @@ common::Status Jd9365Display::draw_bitmap_async(const hal::Area& area, const uin
         m_on_done = nullptr; // Không khởi động được: hợp đồng HAL – on_done không được gọi.
     }
     return status;
+}
+
+common::Status Jd9365Display::read_row_scaled(uint32_t row, uint32_t scale, uint16_t* p_out)
+{
+    if ((m_p_frame_buffer == nullptr) || (p_out == nullptr) || (scale == 0U) || ((row * scale) >= height())) {
+        return (m_p_frame_buffer == nullptr) ? common::Status::ERR_STATE : common::Status::ERR_PARAM;
+    }
+    if (row == 0U) { // Đầu lần chụp: bỏ dữ liệu cũ trong cache (PPA ghi framebuffer bằng DMA).
+        (void)esp_cache_msync(m_p_frame_buffer, m_frame_buffer_bytes, ESP_CACHE_MSYNC_FLAG_DIR_M2C);
+    }
+    const auto* const p_fb = static_cast<const uint16_t*>(m_p_frame_buffer);
+    const auto log_w = static_cast<int32_t>(width());
+    const auto log_h = static_cast<int32_t>(height());
+    const auto y = static_cast<int32_t>(row * scale);
+    const uint32_t out_w = width() / scale;
+    for (uint32_t col = 0U; col < out_w; ++col) {
+        const auto x = static_cast<int32_t>(col * scale);
+        const Point phys = rotation::area_origin_to_physical(m_cfg.rotation, hal::Area{x, y, x, y}, log_w, log_h);
+        p_out[col] = p_fb[(static_cast<size_t>(phys.y) * m_cfg.panel_width) + static_cast<size_t>(phys.x)];
+    }
+    return common::Status::OK;
 }
 
 bool Jd9365Display::on_ppa_done(ppa_client_handle_t p_client, ppa_event_data_t* p_event, void* p_user_data)

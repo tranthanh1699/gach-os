@@ -21,6 +21,15 @@ tools/gach install appstore/dist/x.gapp       # cài app qua cáp USB (debug bri
 python3 -m unittest tools/test_gach.py
 ```
 Debug bridge: [`docs/debug_bridge.md`](docs/debug_bridge.md).
+
+**Phát hành / cập nhật app Lua (kho trực tuyến trên GitHub Pages)** – chi tiết: [`appstore/README.md`](appstore/README.md):
+1. Sửa app trong `appstore/apps/<tên>`.
+2. **Tăng `version` trong `manifest.ini`** (board chỉ hiện *Update* khi version khác bản đã cài).
+3. Commit (`feat(<tên app>): ...` / `fix(...)`) và push lên `main` → workflow `.github/workflows/appstore.yml` đóng gói và đăng `appstore/dist` lên `https://tranthanh1699.github.io/gach-os/` (~1–2 phút, CDN cache thêm tối đa 10 phút).
+4. Trên board: Apps → Store → làm mới (↻) → Update. Kiểm tra từ máy tính: `tools/gach store list` (cột STATE = `update` / `installed`), `tools/gach store install <id>`.
+- Không commit `appstore/dist/` (đã ignore; CI tự sinh). App dùng API SDK mới (`sdk=N` > SDK của firmware đang chạy) phải nạp firmware mới trước, không thì store báo *needs newer firmware*.
+- Thử kho trước khi push: `python3 -m http.server 8000 -d appstore/dist` + `tools/gach store url http://<ip-máy-tính>:8000` (trả về: `gach store url default`).
+- Môi trường AI có thể không có credential GitHub: nếu `git push` lỗi xác thực thì báo Kỹ sư V tự push, không cố cấu hình credential.
 Quy trình hằng ngày: [`docs/dev_workflow.md`](docs/dev_workflow.md) · chi tiết build/flash/sự cố: [`docs/build_and_flash.md`](docs/build_and_flash.md). Build output: `build/<board>/`. Không gọi `idf.py` trực tiếp ở gốc repo — project ESP-IDF nằm ở `platform/esp32/`.
 
 ## 3. Kiến trúc (BẮT BUỘC tuân thủ)

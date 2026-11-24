@@ -426,7 +426,8 @@ def do_top(link: Link, rows: str = "") -> int:
 
 
 # ---- Chẩn đoán (log / trace / event / fault / crash / watchdog / diagnose) ----
-DIAG_COMMANDS = ("log", "trace", "event", "fault", "crash", "watchdog", "diagnose", "store")
+DIAG_COMMANDS = ("log", "trace", "event", "fault", "crash", "watchdog", "diagnose", "store", "screenshot")
+SHOT_REMOTE = "screenshots/shot.gshot"
 TRACE_DUMP_TIMEOUT_S = 120.0  # 8192 bản ghi ~ 160 KB qua 115200 baud ~ 15 s.
 EVENT_POLL_S = 1.0
 CRASH_REMOTE = "crash/coredump.bin"
@@ -582,6 +583,45 @@ def coredump_decode_command(dump: Path, elf: Path) -> list[str] | None:
             str(elf.relative_to(REPO_DIR))]
 
 
+def gshot_to_png(data: bytes) -> bytes:
+    """Ảnh chụp của board ("GSHT", rộng u16, cao u16, rồi RGB565 byte thấp trước) -> PNG RGB 8-bit."""
+    import struct as _struct
+    import zlib as _zlib
+    if data[:4] != b"GSHT":
+        raise ValueError("not a gach screenshot")
+    w, h = _struct.unpack("<HH", data[4:8])
+    pixels = data[8:8 + w * h * 2]
+    if len(pixels) != w * h * 2:
+        raise ValueError("truncated screenshot")
+    raw = bytearray()
+    for y in range(h):
+        raw.append(0)
+        row = pixels[y * w * 2:(y + 1) * w * 2]
+        for (v,) in _struct.iter_unpack("<H", row):
+            r, g, b = (v >> 11) & 0x1F, (v >> 5) & 0x3F, v & 0x1F
+            raw += bytes(((r << 3) | (r >> 2), (g << 2) | (g >> 4), (b << 3) | (b >> 2)))
+
+    def chunk(kind: bytes, body: bytes) -> bytes:
+        return _struct.pack(">I", len(body)) + kind + body + _struct.pack(">I", _zlib.crc32(kind + body) & 0xFFFFFFFF)
+
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", _struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0))
+            + chunk(b"IDAT", _zlib.compress(bytes(raw), 9)) + chunk(b"IEND", b""))
+
+
+def do_screenshot(link: Link, scale: str, path: str) -> int:
+    ok, msg = link.command(f"screenshot {scale}".strip(), timeout=60.0)
+    if not ok:
+        print(f"error: {msg}", file=sys.stderr)
+        return 1
+    ok, data = link.pull(SHOT_REMOTE)
+    if not ok:
+        print("error: transfer aborted", file=sys.stderr)
+        return 1
+    Path(path).write_bytes(gshot_to_png(data))
+    print(f"{path} ({msg.split()[-1]})")
+    return 0
+
+
 def run_diag(link: Link, words: list[str]) -> int:
     """Lệnh chẩn đoán: phần [pc] chạy ở máy tính, còn lại chuyển nguyên văn xuống board."""
     cmd, sub_cmd = words[0], (words[1] if len(words) > 1 else "")
@@ -595,6 +635,11 @@ def run_diag(link: Link, words: list[str]) -> int:
         return do_event_monitor(link)
     if cmd == "crash" and sub_cmd == "dump":
         return do_crash_dump(link, words[2] if len(words) > 2 else None)
+    if cmd == "screenshot":
+        args = words[1:]
+        scale = next((a for a in args if a.isdigit()), "")
+        path = next((a for a in args if not a.isdigit()), "screenshot.png")
+        return do_screenshot(link, scale, path)
     if cmd == "store":  # Tải gói lớn qua Wi-Fi: chờ lâu hơn lệnh thường.
         ok, msg = link.command(fs_command_line(cmd, words[1:]), timeout=STORE_TIMEOUT_S)
         if msg:

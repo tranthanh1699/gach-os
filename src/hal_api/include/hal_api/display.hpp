@@ -74,6 +74,21 @@ public:
         (void)p_ctx;
         return common::Status::ERR_NOT_SUPPORTED;
     }
+
+    /**
+     * @brief Đọc lại nội dung đang hiển thị (chụp màn hình): một hàng logic, thu nhỏ theo scale (lấy mẫu điểm).
+     * @param[in]  row   Hàng của ảnh thu nhỏ (0 .. height()/scale - 1). Hàng 0 bắt đầu một lần chụp.
+     * @param[in]  scale Hệ số thu nhỏ (>= 1).
+     * @param[out] p_out width()/scale pixel RGB565 (byte thấp trước).
+     * @return ERR_NOT_SUPPORTED nếu màn hình không đọc lại được (VD panel SPI không có framebuffer).
+     */
+    virtual common::Status read_row_scaled(uint32_t row, uint32_t scale, uint16_t* p_out)
+    {
+        (void)row;
+        (void)scale;
+        (void)p_out;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
 };
 
 } // namespace hal

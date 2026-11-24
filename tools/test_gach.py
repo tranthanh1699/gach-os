@@ -98,6 +98,17 @@ class CodecTest(unittest.TestCase):
         self.assertEqual(gach.crash_firmware_sha(lines), "f5c39ed90")
         self.assertEqual(gach.crash_firmware_sha(["no crash"]), "")
 
+    def test_gshot_to_png(self):
+        import struct, zlib
+        data = b"GSHT" + struct.pack("<HH", 2, 1) + struct.pack("<HH", 0xF800, 0x001F)
+        png = gach.gshot_to_png(data)
+        self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+        idat = png[png.index(b"IDAT") + 4:]
+        raw = zlib.decompressobj().decompress(idat)
+        self.assertEqual(raw[:7], bytes([0, 255, 0, 0, 0, 0, 255]))
+        with self.assertRaises(ValueError):
+            gach.gshot_to_png(b"GSHT" + struct.pack("<HH", 4, 4))
+
     def test_raw_log_is_not_a_frame(self):
         self.assertIsNone(gach.decode_frame(b"I (123) main: OS started\r\n"))
 
