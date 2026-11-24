@@ -64,8 +64,10 @@ extern "C" void app_main(void)
     // Log trước tiên: mọi log từ đây (kể cả board init) vào lịch sử `gach dmesg`.
     common::log::set_backend(&log_backend);
     (void)esp_log_set_vprintf(&log_vprintf);
+    runtime::diag_install();
 
     const hal::Devices& devices = hal::board_init();
+    runtime::diag_boot(devices);
 
     common::Status status = apps::register_builtin_apps(fw::app_manager());
     if (common::is_ok(status)) {

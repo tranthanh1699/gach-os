@@ -2,6 +2,7 @@
  * @file    runtime.cpp
  * @brief   Quản lý gói: cài (.gapp -> apps/<id>), gỡ, đăng ký slot app script với AppManager.
  */
+#include "common/event.hpp"
 #include "common/log.hpp"
 #include "runtime/runtime.hpp"
 
@@ -51,7 +52,8 @@ struct NameBatch {
 void set_error(const char* p_subject, const char* p_reason)
 {
     (void)std::snprintf(s_error, sizeof(s_error), "%s: %s", p_subject, p_reason);
-    LOGW("runtime", "%s: %s", p_subject, p_reason);
+    EVENT_W("runtime", "%s", s_error);
+    fault_record("runtime", s_error);
 }
 
 // Tĩnh (~8 KiB): không đặt trên stack của task main lúc boot.
@@ -212,7 +214,7 @@ common::Status install_package(const char* p_file_name, bool register_now)
     }
     restore_data(app_dir, data_len);
     (void)s_p_fs->remove(archive);
-    LOGI("runtime", "installed %s v%s (%s)", manifest.id, manifest.version, p_file_name);
+    EVENT_I("runtime", "installed %s v%s (%s)", manifest.id, manifest.version, p_file_name);
     return register_now ? register_installed(manifest.id) : common::Status::OK;
 }
 
@@ -338,7 +340,7 @@ common::Status uninstall(const char* p_id)
     if (!common::is_ok(status)) {
         set_error(p_id, "remove failed");
     } else {
-        LOGI("runtime", "uninstalled %s", p_id);
+        EVENT_I("runtime", "uninstalled %s", p_id);
     }
     return status;
 }

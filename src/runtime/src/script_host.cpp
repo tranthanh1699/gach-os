@@ -12,6 +12,7 @@
 #include <cstring>
 #include <initializer_list>
 
+#include "common/event.hpp"
 #include "common/log.hpp"
 #include "common/string_utils.hpp"
 #include "framework/list_view.hpp"
@@ -20,6 +21,7 @@
 #include "framework/theme.hpp"
 #include "fs_utils.hpp"
 #include "osal/osal.hpp"
+#include "runtime/runtime.hpp"
 #include "runtime/sdk_version.hpp"
 
 namespace runtime {
@@ -1709,6 +1711,10 @@ void ScriptHost::fault(const char* p_message)
     }
     m_faulted = true;
     (void)common::copy_string(m_error, sizeof(m_error), p_message);
+    EVENT_E("script", "%s: %s", m_manifest.id, p_message);
+    char fault_text[common::event::TEXT_MAX_LEN];
+    (void)std::snprintf(fault_text, sizeof(fault_text), "%s: %s", m_manifest.id, p_message);
+    fault_record("script", fault_text);
     set_timers_paused(true);
     // Đóng máy ảo/vẽ lỗi sau: có thể đang ở giữa một lời gọi Lua hoặc sự kiện LVGL.
     (void)lv_async_call(&ScriptHost::async_fault, this);

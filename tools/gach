@@ -19,6 +19,10 @@
   tools/gach pull <remote> [local]    Lấy file từ thẻ SD về
   tools/gach ls [-l] [path] | cat <f> | head|tail [-n N] <f> | cp|mv <a> <b> | rm [-r] <p> | mkdir [-p] <d>
   tools/gach stat | du | df | find [p] -name '*.lua' | grep [-r] <text> <p> | tree | touch | mount | mem | reboot
+  tools/gach log [n] [-l w] | log filter <text> [-l w] | log level [tag] [lvl] | log tail | log export <file>
+  tools/gach trace start|stop|status | trace export <file.json>   Trace thời gian -> chrome://tracing / Perfetto
+  tools/gach event list [n] | event monitor | fault list|clear | watchdog info | diagnose
+  tools/gach crash info|clear | crash dump [file]   Core dump của lần crash gần nhất (lưu trong flash)
   tools/gach launch <app_id> | home | back   Điều khiển app từ xa (test tự động)
   tools/gach perf [reset|bench]       Hiệu năng vẽ LVGL: fps, thời gian khung, phần flush; bench = vẽ lại cả màn 20 lần
 
@@ -28,7 +32,11 @@ Giao thức: docs/debug_bridge.md – khung 0x00 | COBS(type id data crc16_le) |
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
+import shutil
+import subprocess
 import queue
 import select
 import sys
@@ -365,6 +373,9 @@ def do_shell(link: Link) -> int:
         elif parts[0] == "logcat":
             do_logcat(link, follow_only=("-f" in parts[1:]))
             link.log_sink = None
+        elif parts[0] in DIAG_COMMANDS:
+            run_diag(link, parts)
+            link.log_sink = None
         else:
             run_simple(link, line)
 
@@ -414,6 +425,178 @@ def do_top(link: Link, rows: str = "") -> int:
         return 0
 
 
+# ---- Chẩn đoán (log / trace / event / fault / crash / watchdog / diagnose) ----
+DIAG_COMMANDS = ("log", "trace", "event", "fault", "crash", "watchdog", "diagnose")
+TRACE_DUMP_TIMEOUT_S = 120.0  # 8192 bản ghi ~ 160 KB qua 115200 baud ~ 15 s.
+EVENT_POLL_S = 1.0
+CRASH_REMOTE = "crash/coredump.bin"
+TRACE_PHASES = {0: "B", 1: "E", 2: "i", 3: "C"}
+
+
+def parse_trace_dump(lines: list[str]) -> tuple[dict[int, str], list[dict]]:
+    """Giải định dạng `trace dump` của board (xem bridge_diag.cpp) -> (bảng chuỗi, bản ghi có ts µs tuyệt đối)."""
+    strings: dict[int, str] = {}
+    records: list[dict] = []
+    ts = 0
+    for line in lines:
+        kind, _, rest = line.partition(" ")
+        if kind == "T":
+            ts = int(rest.split()[0], 16)
+        elif kind == "S":
+            idx, _, text = rest.partition(" ")
+            strings[int(idx, 16)] = text
+        elif kind == "R":
+            for tok in rest.split():
+                fields = tok.split(".")
+                ts += int(fields[0], 16)
+                records.append({"ts": ts, "phase": int(fields[1], 16), "core": int(fields[2], 16),
+                                "task": int(fields[3], 16), "str": int(fields[4], 16),
+                                "value": int(fields[5]) if len(fields) > 5 else 0})
+    return strings, records
+
+
+def trace_to_chrome(strings: dict[int, str], records: list[dict]) -> dict:
+    """Bản ghi -> JSON Trace Event Format (chrome://tracing, ui.perfetto.dev). Mỗi task RTOS là một thread."""
+    events: list[dict] = []
+    tids: dict[int, int] = {}
+    base = records[0]["ts"] if records else 0
+    for rec in records:
+        tid = tids.setdefault(rec["task"], len(tids) + 1)
+        cat, _, name = strings.get(rec["str"], "?|?").partition("|")
+        ev = {"name": name or cat, "cat": cat, "ph": TRACE_PHASES.get(rec["phase"], "i"), "ts": rec["ts"] - base,
+              "pid": 1, "tid": tid, "args": {"core": rec["core"]}}
+        if ev["ph"] == "i":
+            ev["s"] = "t"
+        if rec["value"] or ev["ph"] == "C":
+            ev["args"]["value"] = rec["value"]
+        events.append(ev)
+    for task, tid in tids.items():
+        events.append({"name": "thread_name", "ph": "M", "pid": 1, "tid": tid,
+                       "args": {"name": strings.get(task, f"task{task}")}})
+    events.append({"name": "process_name", "ph": "M", "pid": 1, "args": {"name": "gach-os"}})
+    return {"traceEvents": events, "displayTimeUnit": "ms"}
+
+
+def do_trace_export(link: Link, path: str) -> int:
+    link.command("trace stop", on_text=lambda _l: None)
+    lines: list[str] = []
+    ok, msg = link.command("trace dump", on_text=lines.append, timeout=TRACE_DUMP_TIMEOUT_S)
+    if not ok:
+        print(f"error: {msg}", file=sys.stderr)
+        return 1
+    strings, records = parse_trace_dump(lines)
+    Path(path).write_text(json.dumps(trace_to_chrome(strings, records)))
+    span_ms = (records[-1]["ts"] - records[0]["ts"]) / 1000 if records else 0
+    print(f"{path}: {msg}, {span_ms:.0f} ms - open in https://ui.perfetto.dev or chrome://tracing")
+    return 0
+
+
+def do_log_export(link: Link, path: str) -> int:
+    lines: list[str] = []
+    ok, msg = link.command("dmesg", on_text=lines.append, timeout=DMESG_TIMEOUT_S)
+    if not ok:
+        print(f"error: {msg}", file=sys.stderr)
+        return 1
+    Path(path).write_text("".join(line if line.endswith("\n") else line + "\n" for line in lines))
+    print(f"{path}: {len(lines)} lines")
+    return 0
+
+
+def event_seq(resp: str) -> int | None:
+    """RESP của `event list|since` là "seq N" (sự kiện mới nhất)."""
+    parts = resp.split()
+    return int(parts[1]) if len(parts) == 2 and parts[0] == "seq" and parts[1].isdigit() else None
+
+
+def do_event_monitor(link: Link) -> int:
+    ok, msg = link.command("event list 10")
+    seq = event_seq(msg) if ok else None
+    if seq is None:
+        print(f"error: {msg}", file=sys.stderr)
+        return 1
+    print("-- event monitor (Ctrl-C to quit) --", file=sys.stderr)
+    try:
+        while True:
+            time.sleep(EVENT_POLL_S)
+            ok, msg = link.command(f"event since {seq}")
+            seq = (event_seq(msg) if ok else None) or seq
+    except KeyboardInterrupt:
+        return 0
+
+
+def crash_firmware_sha(info_lines: list[str]) -> str:
+    """Tiền tố SHA256 của file .elf đã crash, từ dòng "dump  N bytes, firmware <sha>" của `crash info`."""
+    for line in info_lines:
+        if line.startswith("dump") and "firmware " in line:
+            return line.rsplit("firmware ", 1)[1].strip()
+    return ""
+
+
+def find_elf(sha_prefix: str) -> Path | None:
+    """File .elf có SHA256 khớp bản đã crash (core dump chỉ giải được với đúng firmware đó); không có tiền tố thì
+    lấy bản build mới nhất."""
+    elfs = sorted(REPO_DIR.glob("build/*/gach_os.elf"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not sha_prefix:
+        return elfs[0] if elfs else None
+    for elf in elfs:
+        if hashlib.sha256(elf.read_bytes()).hexdigest().startswith(sha_prefix):
+            return elf
+    return None
+
+
+def do_crash_dump(link: Link, local: str | None) -> int:
+    info: list[str] = []
+    link.command("crash info", on_text=info.append)
+    ok, msg = link.command("crash save", timeout=60.0)
+    if not ok:
+        print(f"error: {msg}", file=sys.stderr)
+        return 1
+    path = local or "coredump.bin"
+    if do_pull(link, CRASH_REMOTE, path) != 0:
+        return 1
+    sha = crash_firmware_sha(info)
+    elf = find_elf(sha)
+    cmd = coredump_decode_command(Path(path), elf) if elf is not None else None
+    if cmd is None:
+        print(f"decode: no build/<board>/gach_os.elf matching firmware {sha or '?'} (rebuild the exact source that "
+              f"crashed), then: esp-coredump info_corefile -t raw -c {path} <file.elf>", file=sys.stderr)
+        return 0
+    print("$ " + " ".join(cmd), file=sys.stderr)
+    return subprocess.call(cmd)
+
+
+REPO_DIR = Path(__file__).resolve().parent.parent
+IDF_IMAGE = os.environ.get("DOCKER_IMAGE", "gach-os-idf:latest")
+
+
+def coredump_decode_command(dump: Path, elf: Path) -> list[str] | None:
+    """Lệnh giải core dump bằng esp-coredump: chạy thẳng nếu có trên máy, không thì trong image Docker của build.sh."""
+    dump = dump.resolve()
+    if shutil.which("esp-coredump"):
+        return ["esp-coredump", "info_corefile", "-t", "raw", "-c", str(dump), str(elf)]
+    if not shutil.which("docker"):
+        return None
+    return ["docker", "run", "--rm", "-v", f"{REPO_DIR}:/project", "-v", f"{dump.parent}:/dump", "-w", "/project",
+            IDF_IMAGE, "esp-coredump", "info_corefile", "-t", "raw", "-c", f"/dump/{dump.name}",
+            str(elf.relative_to(REPO_DIR))]
+
+
+def run_diag(link: Link, words: list[str]) -> int:
+    """Lệnh chẩn đoán: phần [pc] chạy ở máy tính, còn lại chuyển nguyên văn xuống board."""
+    cmd, sub_cmd = words[0], (words[1] if len(words) > 1 else "")
+    if cmd == "log" and sub_cmd == "tail":
+        return do_logcat(link, follow_only=True)
+    if cmd == "log" and sub_cmd == "export":
+        return do_log_export(link, words[2] if len(words) > 2 else "gach.log")
+    if cmd == "trace" and sub_cmd == "export":
+        return do_trace_export(link, words[2] if len(words) > 2 else "trace.json")
+    if cmd == "event" and sub_cmd == "monitor":
+        return do_event_monitor(link)
+    if cmd == "crash" and sub_cmd == "dump":
+        return do_crash_dump(link, words[2] if len(words) > 2 else None)
+    return run_simple(link, fs_command_line(cmd, words[1:]))
+
+
 LOG_LEVELS = {"n", "none", "e", "error", "w", "warn", "i", "info", "d", "debug", "v", "verbose"}
 
 
@@ -431,7 +614,7 @@ def split_fs_invocation(argv: list[str], default_port: str) -> tuple[str, list[s
     rest = list(argv)
     if len(rest) >= 2 and rest[0] in ("-p", "--port"):
         port, rest = rest[1], rest[2:]
-    if rest and rest[0] in FS_COMMANDS:
+    if rest and rest[0] in (*FS_COMMANDS, *DIAG_COMMANDS):
         return port, rest
     return None
 
@@ -442,6 +625,8 @@ def main() -> int:
         port, words = fs_call
         link = open_link(argparse.Namespace(port=port))
         try:
+            if words[0] in DIAG_COMMANDS:
+                return run_diag(link, words)
             return run_simple(link, fs_command_line(words[0], words[1:]))
         finally:
             link.close()

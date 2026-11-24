@@ -151,6 +151,11 @@ Mọi tầng ghi log bằng `LOGE/LOGW/LOGI/LOGD/LOGV(tag, ...)` của `common/l
 RTOS/SDK); `platform/main` cắm backend định dạng + đường ra. Log của OS và của SDK chip đi chung một đường: lịch sử
 32 KiB (`gach dmesg`) + debug bridge / UART. Chi tiết: [logging.md](logging.md).
 
+Cùng kiểu đó, `common/event.hpp` (`EVENT_I/W/E`) và `common/trace.hpp` (`TRACE_SCOPE/BEGIN/END/INSTANT/COUNTER`) là
+header L0 dùng được ở mọi tầng; backend (bộ đệm sự kiện, trace, sổ lỗi NVS) ở `src/runtime/src/diag.cpp`. Crash /
+watchdog đọc qua `hal::ISystem` (`crash_summary`, `crash_read`, `crash_erase`, `get_watchdog_info`). Chi tiết:
+[diagnostics.md](diagnostics.md).
+
 ## 8. Port sang chip / board mới
 
 | Việc | Chạm vào | Không chạm |

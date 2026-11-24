@@ -9,6 +9,7 @@
 #include "framework/system.hpp"
 
 #include "common/log.hpp"
+#include "common/trace.hpp"
 #include "framework/config.hpp"
 #include "framework/services.hpp"
 #include "framework/theme.hpp"
@@ -127,7 +128,9 @@ void ui_task(void* p_arg)
         {
             osal::LockGuard guard(ui_mutex());
             diag_set_phase(DIAG_PHASE_HANDLER);
+            TRACE_BEGIN("ui", "lv_timer_handler");
             wait_ms = lv_timer_handler();
+            TRACE_END("ui", "lv_timer_handler");
             diag_set_phase(DIAG_PHASE_IDLE);
         }
         s_diag_loops = s_diag_loops + 1U;

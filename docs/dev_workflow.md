@@ -162,6 +162,11 @@ Trong shell, `install <file>`, `push <local> <remote>`, `pull <remote> [local]` 
 | `heap trace start [n]` / `stop` / `dump [n]` / `heap trace` | Ghi các khối heap được cấp mà chưa giải phóng (tìm rò rỉ): địa chỉ, kích thước. Nơi gọi (4 cấp, giải bằng `addr2line`) chỉ có khi build bật frame pointer – xem `sdkconfig.defaults` của board (tốn ~15 KB RAM nội, chậm ~8 %) |
 | `stats` / `health` | Tổng hợp một màn / chấm điểm sức khỏe thiết bị (OK, INFO, WARN, BAD) |
 | `perf [reset\|bench]` | Hiệu năng vẽ: fps, thời gian khung, phần flush. `bench` = vẽ lại toàn màn 20 lần, in trung bình |
+| `log [n] [-l w]` / `log filter <text>` / `log tail` / `log export <file>` | Xem / lọc lịch sử log / chỉ log mới / lưu ra file |
+| `diagnose` | Một báo cáo: health + crash + sổ lỗi + lỗi trong log + sự kiện gần đây + gợi ý |
+| `event list [n]` / `event monitor` | Sự kiện hệ thống (mở app, Wi-Fi, cài app, lỗi script, reset bất thường) |
+| `trace start\|stop\|status` / `trace export <file.json>` | Trace thời gian (render, flush, chạm, mở app) → ui.perfetto.dev |
+| `fault list\|clear` / `crash info\|dump\|clear` / `watchdog info` | Sổ lỗi bền / core dump lần crash gần nhất / cấu hình watchdog. Chi tiết: [diagnostics.md](diagnostics.md) |
 
 ### 4.4 Log hoạt động thế nào
 
@@ -212,3 +217,4 @@ tools/gach logcat                                        # xem log (không reset
 | Đổi `sdkconfig.defaults` mà không có tác dụng | `./build.sh -b <board> fullclean` rồi build lại |
 | `gach install` báo `no sd card` | Thẻ chưa cắm hoặc không phải FAT32 → cắm thẻ, `gach reboot` |
 | App báo **App error** khi chạy | Xem `gach logcat` để biết dòng lỗi trong `main.lua` |
+| Board tự khởi động lại | `gach diagnose`; crash → `gach crash dump` cho backtrace ([diagnostics.md](diagnostics.md)) |

@@ -6,6 +6,7 @@
 
 #include "framework/config.hpp"
 #include "framework/system.hpp"
+#include "common/trace.hpp"
 #include "osal/osal.hpp"
 
 namespace fw {
@@ -88,6 +89,7 @@ void LvglPort::flush_cb(lv_display_t* p_disp, const lv_area_t* p_area, uint8_t* 
     }
     const hal::Area area{p_area->x1, p_area->y1, p_area->x2, p_area->y2};
     diag_set_phase(DIAG_PHASE_FLUSH);
+    TRACE_INSTANT("ui", "flush", static_cast<int32_t>(lv_area_get_size(p_area)));
     const uint32_t start_us = osal::time_us();
     if (p_self->m_is_async) {
         // Trả về ngay: LVGL vẽ dải kế tiếp vào buffer kia; on_flush_done (ISR) báo flush_ready.
@@ -120,6 +122,11 @@ void LvglPort::touch_read_cb(lv_indev_t* p_indev, lv_indev_data_t* p_data)
     hal::TouchPoint point{};
     diag_set_phase(DIAG_PHASE_TOUCH);
     const bool is_pressed = common::is_ok(p_self->m_p_touch->read(point)) && point.pressed;
+    static bool s_was_pressed = false; // Một indev cảm ứng: chỉ ghi trace lúc đổi trạng thái.
+    if (is_pressed != s_was_pressed) {
+        s_was_pressed = is_pressed;
+        TRACE_INSTANT("input", is_pressed ? "touch down" : "touch up", static_cast<int32_t>(point.x));
+    }
     if (is_pressed) {
         p_self->m_last_point.x = static_cast<int32_t>(point.x);
         p_self->m_last_point.y = static_cast<int32_t>(point.y);
@@ -132,9 +139,11 @@ void LvglPort::render_event_cb(lv_event_t* p_event)
 {
     if (lv_event_get_code(p_event) == LV_EVENT_RENDER_START) {
         diag_set_phase(DIAG_PHASE_RENDER);
+        TRACE_BEGIN("ui", "render");
         s_render_start_us = osal::time_us();
         return;
     }
+    TRACE_END("ui", "render");
     const uint32_t frame_us = osal::time_us() - s_render_start_us;
     s_perf.render_us += frame_us;
     s_perf.max_frame_us = (frame_us > s_perf.max_frame_us) ? frame_us : s_perf.max_frame_us;

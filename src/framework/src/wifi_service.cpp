@@ -6,6 +6,7 @@
 
 #include <cstring>
 
+#include "common/event.hpp"
 #include "common/log.hpp"
 #include "common/string_utils.hpp"
 #include "hal_api/board.hpp"
@@ -154,14 +155,14 @@ void WifiService::log_transition(WifiStatus previous) const
     switch (m_status) {
     case WifiStatus::CONNECTED:
         (void)ip_address(ip, sizeof(ip));
-        LOGI(TAG, "connected to '%s', ip %s", m_ssid, ip);
+        EVENT_I("wifi", "connected to '%s', ip %s", m_ssid, ip);
         break;
     case WifiStatus::FAILED:
-        LOGW(TAG, "connect to '%s' failed", m_ssid);
+        EVENT_W("wifi", "connect to '%s' failed", m_ssid);
         break;
     case WifiStatus::DISCONNECTED:
         if (previous == WifiStatus::CONNECTED) {
-            LOGI(TAG, "disconnected from '%s'", m_ssid);
+            EVENT_I("wifi", "disconnected from '%s'", m_ssid);
         }
         break;
     case WifiStatus::CONNECTING:

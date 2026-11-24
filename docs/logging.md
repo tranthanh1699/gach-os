@@ -50,6 +50,9 @@ Quy ước:
 | `tools/gach logcat` | Như `adb logcat`: lịch sử (từ lúc boot, tối đa 32 KiB) rồi theo dõi log mới |
 | `tools/gach logcat -f` | Chỉ log mới từ lúc kết nối |
 | `tools/gach dmesg` | In lịch sử rồi thoát (dùng trong script) |
+| `tools/gach log -l w 30` / `log filter <text>` | 30 dòng W/E cuối / dòng chứa chuỗi |
+| `tools/gach log export <file>` | Lưu lịch sử ra file |
+| `tools/gach event list` | Sự kiện hệ thống (`EVENT_x`, xem [diagnostics.md](diagnostics.md)) |
 | `gach shell` → `reboot` → `logcat` | Cả ROM / bootloader / đoạn trước `app_main` (chưa có trong lịch sử) dưới dạng chữ thô |
 | `./build.sh monitor` | Chữ thô trên UART (khi không có `gach` kết nối) |
 

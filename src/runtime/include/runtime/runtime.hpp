@@ -71,6 +71,15 @@ void script_stats(ScriptStats& stats);
  */
 bool script_mark_killed(const char* p_id);
 
+/** @brief Cắm backend trace + sổ sự kiện. Gọi đầu tiên trong entry point (trước mọi log / sự kiện). */
+void diag_install();
+
+/** @brief Sau board_init: nạp sổ lỗi (NVS), ghi lỗi nếu lần reset vừa rồi bất thường / có core dump. */
+void diag_boot(const hal::Devices& devices);
+
+/** @brief Ghi một lỗi vào sổ lỗi bền (`gach fault list`). code: "reset", "script", "install"... */
+void fault_record(const char* p_code, const char* p_text);
+
 /**
  * @brief Khởi tạo runtime: cài các gói chờ trong install/, đăng ký mọi app trong apps/.
  * @note  Gọi từ entry point của platform, trước fw::start().

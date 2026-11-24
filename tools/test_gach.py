@@ -67,6 +67,37 @@ class CodecTest(unittest.TestCase):
                          ("/dev/y", ["head", "-n", "3", "f"]))
         self.assertIsNone(gach.split_fs_invocation(["info"], "/dev/x"))
 
+    def test_diag_commands_pass_through(self):
+        self.assertEqual(gach.split_fs_invocation(["log", "-l", "e"], "/dev/x"), ("/dev/x", ["log", "-l", "e"]))
+        self.assertEqual(gach.split_fs_invocation(["trace", "export", "t.json"], "/dev/x")[1][0], "trace")
+
+    def test_parse_trace_dump(self):
+        lines = ["T 1000 3", "S 0 ui|render", "S 1 UI", "R 0.0.1.1.0 64.1.1.1.0", "S 2 input|touch down",
+                 "R a.2.0.1.2.-5"]
+        strings, records = gach.parse_trace_dump(lines)
+        self.assertEqual(strings, {0: "ui|render", 1: "UI", 2: "input|touch down"})
+        self.assertEqual([r["ts"] for r in records], [0x1000, 0x1064, 0x106E])
+        self.assertEqual(records[2]["value"], -5)
+        self.assertEqual(records[1]["phase"], 1)
+
+    def test_trace_to_chrome(self):
+        strings, records = gach.parse_trace_dump(["T 0 2", "S 0 ui|render", "S 1 UI", "R 0.0.1.1.0 a.1.1.1.0"])
+        out = gach.trace_to_chrome(strings, records)["traceEvents"]
+        self.assertEqual([e["ph"] for e in out[:2]], ["B", "E"])
+        self.assertEqual(out[1]["ts"], 10)
+        self.assertEqual(out[0]["name"], "render")
+        names = [e["args"]["name"] for e in out if e["name"] == "thread_name"]
+        self.assertEqual(names, ["UI"])
+
+    def test_event_seq(self):
+        self.assertEqual(gach.event_seq("seq 42"), 42)
+        self.assertIsNone(gach.event_seq("timeout waiting for device"))
+
+    def test_crash_firmware_sha(self):
+        lines = ["task       ui", "dump       14368 bytes, firmware f5c39ed90", "decode ..."]
+        self.assertEqual(gach.crash_firmware_sha(lines), "f5c39ed90")
+        self.assertEqual(gach.crash_firmware_sha(["no crash"]), "")
+
     def test_raw_log_is_not_a_frame(self):
         self.assertIsNone(gach.decode_frame(b"I (123) main: OS started\r\n"))
 

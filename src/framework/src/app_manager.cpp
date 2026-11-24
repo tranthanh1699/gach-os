@@ -6,7 +6,9 @@
 
 #include <cstring>
 
+#include "common/event.hpp"
 #include "common/log.hpp"
+#include "common/trace.hpp"
 #include "common/string_utils.hpp"
 #include "framework/services.hpp"
 #include "storage_keys.hpp"
@@ -309,10 +311,11 @@ common::Status AppManager::push(App& app)
     m_stack_depth++;
 
     const uint32_t start_us = osal::time_us();
+    TRACE_SCOPE("app", "open");
     app.on_create(p_root);
     app.on_resume();
     notify_foreground();
-    LOGI(TAG, "open %s (%u ms, depth %u)", app.info().p_id,
+    EVENT_I("app", "open %s (%u ms, depth %u)", app.info().p_id,
          static_cast<unsigned>((osal::time_us() - start_us) / US_PER_MS), static_cast<unsigned>(m_stack_depth));
     return common::Status::OK;
 }
@@ -321,7 +324,7 @@ void AppManager::pop_top()
 {
     m_stack_depth--;
     StackEntry& top = m_stack[m_stack_depth];
-    LOGI(TAG, "close %s", top.p_app->info().p_id);
+    EVENT_I("app", "close %s", top.p_app->info().p_id);
     top.p_app->on_pause();
     top.p_app->on_destroy();
     // Xóa bất đồng bộ: an toàn khi back() được gọi từ chính event callback của app.

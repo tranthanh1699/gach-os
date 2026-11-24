@@ -47,6 +47,12 @@ bool bridge_fs_resolve(const char* p_in, char* p_out, size_t out_len);
  */
 bool bridge_fs_command(uint8_t id, size_t argc, char* const p_args[], const hal::Devices& devices);
 
+/**
+ * @brief Lệnh chẩn đoán (log [n] | log filter, trace, event, fault, crash, watchdog).
+ * @return false nếu không phải lệnh của nhóm này.
+ */
+bool bridge_diag_command(uint8_t id, size_t argc, char* const p_args[], const hal::Devices& devices);
+
 /** @brief Gửi một dòng kết quả (khung TEXT) của lệnh id. */
 void bridge_text(uint8_t id, const char* p_text);
 

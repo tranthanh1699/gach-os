@@ -24,6 +24,9 @@ tools/gach help                                 # lệnh theo nhóm; help apps /
 tools/gach app list                             # mọi app + trạng thái; app inspect|stop|kill|disable <id>...
 tools/gach health                               # chấm điểm OK/WARN/BAD: RAM, stack task, CPU, nhiệt độ, thẻ, Wi-Fi, reset
 tools/gach top                                  # %CPU từng task, làm mới mỗi giây (Ctrl-C)
+tools/gach diagnose                             # health + crash + sổ lỗi + lỗi gần đây; xem docs/diagnostics.md
+tools/gach trace start; tools/gach trace export ui.json   # trace thời gian -> ui.perfetto.dev
+tools/gach crash dump                           # core dump lần crash gần nhất + backtrace
 # trong gach shell: uidiag – trạng thái task UI không cần khóa (vòng lặp, phase, đứng bao lâu) khi nghi UI treo
 ```
 

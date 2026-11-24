@@ -8,6 +8,8 @@
  */
 #include "bridge_sys.hpp"
 
+#include "diag.hpp"
+
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
@@ -559,8 +561,7 @@ void cmd_resetinfo(uint8_t id, const hal::Devices& dev)
     }
     line(id, "last reset: %s%s", reset_name(boot.reason), is_abnormal(boot.reason) ? "  (ABNORMAL)" : "");
     if (boot.reason == hal::ResetReason::PANIC) {
-        line(id, "hint: run `gach dmesg` right after a crash is not possible (RAM is cleared); use");
-        line(id, "      `./build.sh -p <port> monitor` to catch the panic backtrace next time");
+        line(id, "hint: the crash was saved to flash - see `gach crash info` / `gach crash dump`");
     } else if (boot.reason == hal::ResetReason::BROWNOUT) {
         line(id, "hint: supply voltage dropped - use a powered USB port / stronger supply");
     } else if ((boot.reason == hal::ResetReason::TASK_WATCHDOG) || (boot.reason == hal::ResetReason::INT_WATCHDOG)) {
@@ -668,7 +669,8 @@ void grade(uint8_t id, Grade g, const char* p_fmt, ...)
     }
 }
 
-void cmd_health(uint8_t id, const hal::Devices& dev)
+/** @brief Chấm điểm từng hạng mục (không gửi RESP). */
+void health_checks(uint8_t id, const hal::Devices& dev)
 {
     s_worst = Grade::OK;
     hal::MemoryStats mem{};
@@ -745,8 +747,94 @@ void cmd_health(uint8_t id, const hal::Devices& dev)
         grade(id, is_abnormal(boot.reason) ? Grade::WARN : Grade::OK, "last reset: %s (boot #%u)",
               reset_name(boot.reason), static_cast<unsigned>(boot.boot_count));
     }
-    static const char* const OVERALL[] = {"HEALTHY", "HEALTHY", "NEEDS ATTENTION", "UNHEALTHY"};
+}
+
+const char* const OVERALL[] = {"HEALTHY", "HEALTHY", "NEEDS ATTENTION", "UNHEALTHY"};
+
+void cmd_health(uint8_t id, const hal::Devices& dev)
+{
+    health_checks(id, dev);
     bridge_resp(id, s_worst != Grade::BAD, OVERALL[static_cast<size_t>(s_worst)]);
+}
+
+// ---- diagnose: health + crash + faults + lỗi gần đây + gợi ý ----
+constexpr size_t DIAG_RECENT = 5U;
+constexpr size_t DIAG_EVENTS = 8U;
+
+struct LogCounts {
+    uint32_t errors;
+    uint32_t warnings;
+    char last_error[LINE_LEN];
+};
+
+diag::EventRecord s_diag_events[DIAG_EVENTS];
+
+void cmd_diagnose(uint8_t id, const hal::Devices& dev)
+{
+    line(id, "== health ==");
+    health_checks(id, dev);
+
+    line(id, "== crash ==");
+    hal::CrashSummary crash{};
+    const bool has_crash = common::is_ok(dev.p_system->crash_summary(crash));
+    if (has_crash) {
+        grade(id, Grade::BAD, "crash dump stored: task %s, pc 0x%08lx, %s", crash.task,
+              static_cast<unsigned long>(crash.pc), (crash.reason[0] != '\0') ? crash.reason : "unknown reason");
+    } else {
+        grade(id, Grade::OK, "no crash dump stored");
+    }
+
+    line(id, "== faults (kept across reboots) ==");
+    const size_t faults = diag::fault_count();
+    grade(id, (faults > 0U) ? Grade::WARN : Grade::OK, "%u fault(s) logged", static_cast<unsigned>(faults));
+    for (size_t index = (faults > DIAG_RECENT) ? (faults - DIAG_RECENT) : 0U; index < faults; ++index) {
+        line(id, "       %s", diag::fault_at(index));
+    }
+
+    line(id, "== log since boot ==");
+    static LogCounts s_counts;
+    s_counts = LogCounts{};
+    bridge_for_each_log_line([](const char* p_line, void* p_ctx) {
+        auto& counts = *static_cast<LogCounts*>(p_ctx);
+        if ((p_line[0] == 'E') && (p_line[1] == ' ')) {
+            ++counts.errors;
+            (void)std::snprintf(counts.last_error, sizeof(counts.last_error), "%s", p_line);
+        } else if ((p_line[0] == 'W') && (p_line[1] == ' ')) {
+            ++counts.warnings;
+        } else {
+            // Mức khác: không đếm.
+        }
+    }, &s_counts);
+    grade(id, (s_counts.errors > 0U) ? Grade::WARN : Grade::OK, "%u error(s), %u warning(s) in the log history",
+          static_cast<unsigned>(s_counts.errors), static_cast<unsigned>(s_counts.warnings));
+    if (s_counts.last_error[0] != '\0') {
+        line(id, "       last: %s", s_counts.last_error);
+    }
+
+    line(id, "== recent events ==");
+    const uint32_t last = diag::events_last_seq();
+    const size_t got =
+        diag::events_since((last > DIAG_EVENTS) ? (last - DIAG_EVENTS) : 0U, s_diag_events, DIAG_EVENTS);
+    for (size_t index = 0U; index < got; ++index) {
+        static const char SEVERITY[] = {'I', 'W', 'E'};
+        line(id, "       %c %-8s %s", SEVERITY[static_cast<size_t>(s_diag_events[index].severity)],
+             s_diag_events[index].p_source, s_diag_events[index].text);
+    }
+
+    line(id, "== hints ==");
+    if (has_crash) {
+        line(id, "- `gach crash info` / `gach crash dump` for the backtrace, then `gach crash clear`");
+    }
+    if (faults > 0U) {
+        line(id, "- `gach fault list` for details, `gach fault clear` once handled");
+    }
+    if (s_counts.errors > 0U) {
+        line(id, "- `gach log -l e 100` lists the last error lines");
+    }
+    if (s_worst == Grade::OK) {
+        line(id, "- nothing to do");
+    }
+    bridge_resp(id, true, OVERALL[static_cast<size_t>(s_worst)]); // Báo cáo: luôn OK, kết luận nằm trong chữ.
 }
 
 } // namespace
@@ -793,6 +881,8 @@ bool bridge_sys_command(uint8_t id, size_t argc, char* const p_args[], const hal
         cmd_stats(id, devices);
     } else if (is("health")) {
         cmd_health(id, devices);
+    } else if (is("diagnose")) {
+        cmd_diagnose(id, devices);
     } else {
         return false;
     }

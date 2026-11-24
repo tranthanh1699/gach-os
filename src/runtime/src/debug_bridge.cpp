@@ -215,13 +215,25 @@ const HelpEntry HELP[] = {
     {"files", "pull <remote> [local|-]", "[pc] copy a file from the card"},
     {"logs", "logcat [-f]", "[pc] log history then live log (-f: live only)"},
     {"logs", "dmesg", "log history (32 KB, from boot)"},
-    {"logs", "loglevel [tag] [e|w|i|d|v|n]", "show / change log levels"},
+    {"logs", "log [n] [-l e|w|i|d|v]", "last n log lines (default 50), optionally only level w or worse"},
+    {"logs", "log level [tag] [e|w|i|d|v|n]", "show / change log levels (same as loglevel)"},
+    {"logs", "log filter <tag|text> [-l w] [-n N]", "log lines containing text, at level w or worse"},
+    {"logs", "log tail | log export <file>", "[pc] live log only / save the history to a file"},
+    {"diag", "diagnose", "health + faults + crash + recent errors + hints"},
+    {"diag", "trace start|stop|status", "record timing events (render, flush, touch, app open...)"},
+    {"diag", "trace export <file.json>", "[pc] save the trace for chrome://tracing / ui.perfetto.dev"},
+    {"diag", "event list [n] | event monitor", "system events (app, wifi, install, errors) / [pc] follow live"},
+    {"diag", "fault list|clear", "fault log kept across reboots (resets, crashes, script errors)"},
+    {"diag", "crash info|clear", "last crash dump: task, pc, cause / erase it"},
+    {"diag", "crash test --yes", "deliberately crash to check the core dump works"},
+    {"diag", "crash dump [file]", "[pc] copy the core dump to the computer and decode it"},
+    {"diag", "watchdog info", "task / interrupt watchdog settings"},
     {"ui", "home | back", "press Home / Back"},
     {"ui", "perf [reset|bench]", "redraw statistics / full-screen redraw benchmark"},
     {"ui", "uidiag", "UI task state (works even when the UI hangs)"},
     {"legacy", "info | mem | apps | launch <id> | install | uninstall <id>", "older short forms"},
 };
-const char* const HELP_GROUPS[] = {"system", "memory", "tasks", "apps", "files", "logs", "ui", "legacy"};
+const char* const HELP_GROUPS[] = {"system", "memory", "tasks", "apps", "files", "logs", "diag", "ui", "legacy"};
 
 /** @brief Từ thứ index (0-based) của chuỗi, phân cách bởi dấu cách; "" nếu không có. */
 void nth_word(const char* p_text, size_t index, char* p_out, size_t out_len)
@@ -731,6 +743,8 @@ void on_command(const Frame& frame)
         cmd_dmesg(id);
     } else if (std::strcmp(p_cmd, "loglevel") == 0) {
         cmd_loglevel(id, p_arg1, p_arg2);
+    } else if ((std::strcmp(p_cmd, "log") == 0) && (p_arg1 != nullptr) && (std::strcmp(p_arg1, "level") == 0)) {
+        cmd_loglevel(id, p_arg2, (argc > 3U) ? args[3] : nullptr);
     } else if (std::strcmp(p_cmd, "install") == 0) {
         cmd_install(id);
     } else if (std::strcmp(p_cmd, "uninstall") == 0) {
@@ -757,6 +771,8 @@ void on_command(const Frame& frame)
         // Lệnh filesystem (bridge_fs.cpp) – thay ls / mkdir / rm cũ.
     } else if (bridge_app_command(id, argc, args, *s_p_devices)) {
         // Lệnh `app ...` (bridge_app.cpp).
+    } else if (bridge_diag_command(id, argc, args, *s_p_devices)) {
+        // Chẩn đoán: log, trace, event, fault, crash, watchdog (bridge_diag.cpp).
     } else if (bridge_sys_command(id, argc, args, *s_p_devices)) {
         // Lệnh introspection (bridge_sys.cpp).
     } else {
