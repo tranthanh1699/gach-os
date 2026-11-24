@@ -96,6 +96,25 @@ class GimgTest(unittest.TestCase):
         self.assertNotIn("img/a.png", names)
         self.assertNotIn("tools/make_art.py", names)
 
+    def test_index_tsv(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Path(tmp) / "app"
+            app.mkdir()
+            (app / "main.lua").write_text("return {}\n")
+            (app / "manifest.ini").write_text("id=org.t.demo\nname=Demo App\nversion=1.2.0\nsdk=8\nicon=play\ncolor=#112233\n")
+            dist = Path(tmp) / "dist"
+            gapp_pack.pack(app, dist / "org.t.demo.gapp")
+            gapp_pack.write_index(dist)
+            rows = (dist / "index.tsv").read_text().splitlines()
+            page = (dist / "index.html").read_text()
+            page_ok = ("Demo App" in page) and ('href="org.t.demo.gapp"' in page)
+            data = (dist / "org.t.demo.gapp").read_bytes()
+        self.assertEqual(rows[0], "#gach-store\t1")
+        self.assertTrue(page_ok)
+        cols = rows[1].split("\t")
+        self.assertEqual(cols, ["org.t.demo", "Demo App", "1.2.0", "8", str(len(data)),
+                                __import__("hashlib").sha256(data).hexdigest(), "org.t.demo.gapp", "play", "#112233"])
+
 
 if __name__ == "__main__":
     unittest.main()

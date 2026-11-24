@@ -1,0 +1,46 @@
+# Kho ứng dụng: đóng gói appstore/apps và đăng thư mục appstore/dist lên GitHub Pages.
+# Board tải <Pages URL>/index.tsv rồi từng gói .gapp (app "Apps" -> Store, hoặc `gach store install <id>`).
+# Bật một lần: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+name: App store
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "appstore/**"
+      - "tools/gapp_pack.py"
+      - "src/runtime/include/runtime/sdk_version.hpp"
+      - ".github/workflows/appstore.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: appstore-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test packer
+        run: python3 -m unittest tools/test_gapp_pack.py -v
+      - name: Package apps (.gapp + index.tsv / index.json / index.html)
+        run: ./appstore/gapp.sh pack
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: appstore/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import html
 import io
 import json
 import re
@@ -41,7 +42,8 @@ SDK_VERSION = read_sdk_version()
 ID_RE = re.compile(r"^[a-z0-9_-][a-z0-9._-]{0,30}$")
 MAX_PATH = 100  # Giới hạn tên trong header tar ustar (không dùng prefix cho đơn giản).
 EXCLUDE = {".DS_Store", "Thumbs.db"}
-EXCLUDE_DIRS = {"tools"}  # Công cụ phát triển của app (VD script vẽ đồ họa): không đóng vào gói.
+EXCLUDE_DIRS = {"tools"}
+STORE_INDEX_FORMAT = 1  # Phiên bản định dạng dist/index.tsv (kho ứng dụng trên board đọc).  # Công cụ phát triển của app (VD script vẽ đồ họa): không đóng vào gói.
 
 # ---- PNG -> .gimg (ảnh nạp thẳng vào LVGL, board không cần giải PNG) ----
 GIMG_MAGIC = b"GIMG"
@@ -237,7 +239,35 @@ def write_index(dist_dir: Path) -> Path:
         })
     index = dist_dir / "index.json"
     index.write_text(json.dumps({"format": 1, "apps": apps}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    # Bản rút gọn cho board (đọc không cần bộ phân tích JSON): dòng đầu "#gach-store<TAB>định dạng", mỗi app một dòng
+    # id, name, version, sdk, size, sha256, file, icon, color (tách bằng TAB).
+    lines = [f"#gach-store\t{STORE_INDEX_FORMAT}"]
+    for a in apps:
+        cols = [a["id"], a["name"], a["version"], str(a["sdk"]), str(a["size"]), a["sha256"], a["file"], a["icon"],
+                a["color"]]
+        if any("\t" in c or "\n" in c for c in cols):
+            raise SystemExit(f"error: {a['file']}: manifest fields must not contain tabs / newlines")
+        lines.append("\t".join(cols))
+    (dist_dir / "index.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (dist_dir / "index.html").write_text(store_page(apps), encoding="utf-8")
     return index
+
+
+def store_page(apps: list[dict]) -> str:
+    """Trang xem kho bằng trình duyệt (board không dùng trang này)."""
+    rows = "".join(
+        f"<tr><td>{html.escape(a['name'])}</td><td><code>{html.escape(a['id'])}</code></td>"
+        f"<td>{html.escape(a['version'])}</td><td>{a['sdk']}</td><td>{(a['size'] + 1023) // 1024} KB</td>"
+        f"<td><a href=\"{html.escape(a['file'])}\">.gapp</a></td></tr>"
+        for a in apps)
+    return ("<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" "
+            "content=\"width=device-width, initial-scale=1\"><title>gach-os app store</title>"
+            "<style>body{font-family:system-ui,sans-serif;margin:24px;color:#1b1f24}table{border-collapse:collapse}"
+            "td,th{padding:6px 12px;border-bottom:1px solid #d0d7de;text-align:left}</style></head><body>"
+            f"<h1>gach-os app store</h1><p>{len(apps)} app(s). On the device: Apps &rarr; Store. "
+            "Index for devices: <a href=\"index.tsv\">index.tsv</a> &middot; <a href=\"index.json\">index.json</a></p>"
+            "<table><tr><th>Name</th><th>Id</th><th>Version</th><th>SDK</th><th>Size</th><th>Package</th></tr>"
+            f"{rows}</table></body></html>\n")
 
 
 def main() -> int:

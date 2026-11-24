@@ -426,10 +426,11 @@ def do_top(link: Link, rows: str = "") -> int:
 
 
 # ---- Chẩn đoán (log / trace / event / fault / crash / watchdog / diagnose) ----
-DIAG_COMMANDS = ("log", "trace", "event", "fault", "crash", "watchdog", "diagnose")
+DIAG_COMMANDS = ("log", "trace", "event", "fault", "crash", "watchdog", "diagnose", "store")
 TRACE_DUMP_TIMEOUT_S = 120.0  # 8192 bản ghi ~ 160 KB qua 115200 baud ~ 15 s.
 EVENT_POLL_S = 1.0
 CRASH_REMOTE = "crash/coredump.bin"
+STORE_TIMEOUT_S = 200.0  # Board chờ tối đa 180 s cho một gói.
 TRACE_PHASES = {0: "B", 1: "E", 2: "i", 3: "C"}
 
 
@@ -594,6 +595,11 @@ def run_diag(link: Link, words: list[str]) -> int:
         return do_event_monitor(link)
     if cmd == "crash" and sub_cmd == "dump":
         return do_crash_dump(link, words[2] if len(words) > 2 else None)
+    if cmd == "store":  # Tải gói lớn qua Wi-Fi: chờ lâu hơn lệnh thường.
+        ok, msg = link.command(fs_command_line(cmd, words[1:]), timeout=STORE_TIMEOUT_S)
+        if msg:
+            print(msg if ok else f"error: {msg}")
+        return 0 if ok else 1
     return run_simple(link, fs_command_line(cmd, words[1:]))
 
 
