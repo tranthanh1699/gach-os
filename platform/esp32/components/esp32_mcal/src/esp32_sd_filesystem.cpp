@@ -13,6 +13,10 @@
 #include "driver/sdspi_host.h"
 #include "esp_vfs_fat.h"
 #include "sdmmc_cmd.h"
+#include "diskio_sdmmc.h"
+#include "sd_protocol_defs.h"
+#include "ff.h"
+#include <utime.h>
 #if SOC_SDMMC_HOST_SUPPORTED
 #include "driver/sdmmc_host.h"
 #endif
@@ -323,6 +327,77 @@ common::Status Esp32SdFileSystem::rename(const char* p_from, const char* p_to)
         return common::Status::ERR_STATE; // Không ghi đè.
     }
     return (std::rename(from, to) == 0) ? common::Status::OK : common::Status::ERR_IO;
+}
+
+common::Status Esp32SdFileSystem::get_mount_info(hal::MountInfo& info)
+{
+    info = hal::MountInfo{};
+    if (!m_is_mounted || (m_p_card == nullptr)) {
+        return common::Status::ERR_STATE;
+    }
+    (void)std::snprintf(info.mount_point, sizeof(info.mount_point), "%s", MOUNT_POINT);
+    (void)std::snprintf(info.device, sizeof(info.device), "%.*s", static_cast<int>(sizeof(m_p_card->cid.name)),
+                        m_p_card->cid.name);
+    const char* p_media = "SDSC";
+    if (m_p_card->is_mmc != 0U) {
+        p_media = "MMC";
+    } else if ((m_p_card->ocr & SD_OCR_SDHC_CAP) != 0U) {
+        constexpr uint64_t SDXC_MIN_BYTES = 32ULL * 1024U * 1024U * 1024U; // > 32 GB: SDXC
+        const uint64_t bytes = static_cast<uint64_t>(m_p_card->csd.capacity) * m_p_card->csd.sector_size;
+        p_media = (bytes > SDXC_MIN_BYTES) ? "SDXC" : "SDHC";
+    } else {
+        // SDSC (<= 2 GB).
+    }
+    (void)std::snprintf(info.media, sizeof(info.media), "%s", p_media);
+    info.bus_width = static_cast<uint8_t>(1U << m_p_card->log_bus_width);
+    info.freq_khz = static_cast<uint32_t>(m_p_card->real_freq_khz);
+    info.sector_size = static_cast<uint32_t>(m_p_card->csd.sector_size);
+
+    char drive[8];
+    (void)std::snprintf(drive, sizeof(drive), "%u:", static_cast<unsigned>(ff_diskio_get_pdrv_card(m_p_card)));
+    FATFS* p_fs = nullptr;
+    DWORD free_clusters = 0U;
+    if (f_getfree(drive, &free_clusters, &p_fs) == FR_OK) {
+        static const char* const TYPES[] = {"?", "FAT12", "FAT16", "FAT32", "exFAT"};
+        const unsigned type = p_fs->fs_type;
+        (void)std::snprintf(info.fs_type, sizeof(info.fs_type), "%s", (type < 5U) ? TYPES[type] : "FAT");
+        info.cluster_size = static_cast<uint32_t>(p_fs->csize) * info.sector_size;
+    } else {
+        (void)std::snprintf(info.fs_type, sizeof(info.fs_type), "FAT");
+    }
+    return common::Status::OK;
+}
+
+common::Status Esp32SdFileSystem::touch(const char* p_path)
+{
+    char native[NATIVE_PATH_LEN];
+    if (!m_is_mounted || !to_native(p_path, native, sizeof(native))) {
+        return common::Status::ERR_PARAM;
+    }
+    struct stat info {};
+    if (::stat(native, &info) == 0) {
+        return (utime(native, nullptr) == 0) ? common::Status::OK : common::Status::ERR_IO; // Ngày sửa = bây giờ.
+    }
+    FILE* const p_file = std::fopen(native, "ab");
+    if (p_file == nullptr) {
+        return common::Status::ERR_IO;
+    }
+    (void)std::fclose(p_file);
+    return common::Status::OK;
+}
+
+common::Status Esp32SdFileSystem::format()
+{
+    if (!m_is_mounted || (m_p_card == nullptr)) {
+        return common::Status::ERR_STATE;
+    }
+    for (FILE*& p_file : m_files) {
+        if (p_file != nullptr) {
+            (void)std::fclose(p_file);
+            p_file = nullptr;
+        }
+    }
+    return (esp_vfs_fat_sdcard_format(MOUNT_POINT, m_p_card) == ESP_OK) ? common::Status::OK : common::Status::ERR_IO;
 }
 
 } // namespace esp32_mcal

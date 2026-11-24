@@ -42,6 +42,18 @@ struct DirEntry {
  */
 using DirCallback = bool (*)(const DirEntry& entry, void* p_ctx);
 
+/** @brief Thông tin phân vùng đang mount (lệnh `mount`). */
+struct MountInfo {
+    char mount_point[16]; /**< Đường dẫn native, VD "/sd". */
+    char fs_type[16];     /**< VD "FAT32", "exFAT". */
+    char device[16];      /**< Tên thẻ / thiết bị (CID). */
+    char media[16];       /**< VD "SDHC", "SDXC", "SDSC", "MMC". */
+    uint8_t bus_width;    /**< Số dây dữ liệu (1, 4, 8), 0 = không rõ. */
+    uint32_t freq_khz;    /**< Tần số bus đang chạy. */
+    uint32_t sector_size; /**< Byte / sector. */
+    uint32_t cluster_size; /**< Byte / cluster (đơn vị cấp phát), 0 = không rõ. */
+};
+
 /** @brief Hệ thống file. Không yêu cầu thread-safe (chỉ gọi từ một task tại một thời điểm). */
 class IFileSystem {
 public:
@@ -108,6 +120,26 @@ public:
         (void)p_to;
         return common::Status::ERR_NOT_SUPPORTED;
     }
+
+    /** @param[out] info Thông tin mount / thẻ nhớ. */
+    virtual common::Status get_mount_info(MountInfo& info)
+    {
+        (void)info;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+
+    /** @brief Như `touch`: tạo file rỗng nếu chưa có, có rồi thì cập nhật ngày sửa về hiện tại. */
+    virtual common::Status touch(const char* p_path)
+    {
+        (void)p_path;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+
+    /**
+     * @brief XÓA SẠCH và format lại phân vùng (vẫn mount sau khi xong).
+     * @warning Mất toàn bộ dữ liệu. Người gọi phải đóng mọi file đang mở trước.
+     */
+    virtual common::Status format() { return common::Status::ERR_NOT_SUPPORTED; }
 
     /**
      * @brief Dung lượng phân vùng (byte).

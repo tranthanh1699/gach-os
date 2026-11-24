@@ -64,6 +64,9 @@ public:
     common::Status list_dir_detailed(const char* p_path, hal::DirCallback callback, void* p_ctx) override;
     common::Status stat(const char* p_path, hal::DirEntry& entry) override;
     common::Status rename(const char* p_from, const char* p_to) override;
+    common::Status get_mount_info(hal::MountInfo& info) override;
+    common::Status touch(const char* p_path) override;
+    common::Status format() override;
 
 private:
     bool to_native(const char* p_path, char* p_out, size_t out_len) const;
