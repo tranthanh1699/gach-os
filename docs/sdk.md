@@ -330,6 +330,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 - [`appstore/apps/counter`](../appstore/apps/counter): UI, sự kiện, timer, `gach.storage`.
 - [`appstore/apps/world_clock`](../appstore/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
 - [`appstore/apps/game2048`](../appstore/apps/game2048) (SDK v3): game 2048 với `on_swipe`, bàn cờ vuông co giãn theo màn hình, lưu ván đang chơi và điểm cao nhất.
+- [`appstore/apps/pet`](../appstore/apps/pet) (SDK v6): Virtual Pet. 4 loài, trứng nở và lớn dần theo thời gian thật (tính bù cả lúc app đóng theo giờ NTP), tâm trạng thể hiện qua mắt / miệng / má, chạm & vuốt để tương tác. Nhân vật vẽ bằng `box` + `set_pos`, chuyển động bằng `animate` (nhịp thở, chớp mắt, nhảy, tim bay, Zzz), lưu trạng thái trong một khóa `gach.storage`.
 - [`appstore/apps/uikit`](../appstore/apps/uikit) (SDK v6): UI Kit, trưng bày nút nhiều kiểu, nhập liệu, sự kiện, alert/toast, hiệu ứng; dòng cuối hiện sự kiện vừa xảy ra.
 - [`appstore/apps/weather`](../appstore/apps/weather) (SDK v5): thời tiết qua Wi-Fi (Open-Meteo): nhiệt độ, cảm giác như, độ ẩm, gió, UV, xác suất mưa, dự báo theo giờ / 7 ngày, mặt trời mọc/lặn. Dùng `net.get`, `json.decode`, icon vẽ bằng `box` + `set_pos`.
 - [`appstore/apps/sysmon`](../appstore/apps/sysmon) (SDK v4): System Monitor. Dashboard tải CPU từng core, RAM/PSRAM/heap LVGL, firmware/thẻ SD, nhiệt độ, Wi-Fi, cập nhật mỗi giây bằng `gach.sys.stats()` cùng `arc`, `bar`, `chart`.
