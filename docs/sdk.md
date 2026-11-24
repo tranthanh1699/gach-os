@@ -1,4 +1,4 @@
-# gach SDK (v7): viết app cài thêm cho gach-os
+# gach SDK (v8): viết app cài thêm cho gach-os
 
 App cài thêm là một **gói `.gapp`** chứa mã Lua 5.4, tương tự file `.jar` trên Nokia S60 hay `.apk` trên Android. Gói chạy trong máy ảo có sandbox, nên cùng một gói chạy được trên mọi board gach-os, bất kể chip hay kích thước màn hình.
 
@@ -82,6 +82,10 @@ Mọi widget được tham chiếu bằng **handle số nguyên**. Handle trở 
 Font hệ thống chỉ có ASCII cùng các ký hiệu trong `SYMBOL`; ký tự khác (VD: `÷`, chữ có dấu) sẽ hiện ô trống. Ký hiệu thiếu có thể vẽ bằng `box` (xem nút chia trong app Calculator).
 
 `column`/`row` chỉ dùng để bố cục, không nhận chạm (chạm rơi xuống widget chứa nó).
+
+`row` / `column` mặc định **rộng 100 % cha**, và `row` tự xuống dòng khi hết chỗ. Một `row` lồng trong `row` (VD cụm
+icon + nhãn trên thanh công cụ) phải đặt `style(h, {width = "content"})` hoặc chiều rộng cụ thể, không thì nó chiếm cả
+hàng và rớt xuống dòng mới.
 
 #### Co giãn theo màn hình (SDK v3, manifest `sdk=3`)
 
@@ -196,6 +200,69 @@ ui.on(del, "click", function()
 end)
 ```
 
+#### Ảnh và canvas (SDK v8, manifest `sdk=8`)
+
+Đặt file **PNG** trong thư mục app (VD `img/hero.png`). Lúc đóng gói, `gapp.sh pack` đổi mỗi PNG sang `.gimg`
+(RGB565, thêm kênh alpha nếu ảnh có trong suốt): board vẽ thẳng, không giải mã. Trong Lua vẫn gọi bằng tên `.png`.
+PNG hỗ trợ: 8-bit (xám, RGB, bảng màu kể cả `tRNS`, xám + alpha, RGBA), không interlace. Ảnh nạp lần đầu được giữ
+trong kho ảnh của app (8 MiB) tới khi app đóng.
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `image(parent, path, {w=, h=, fit=, opa=}) -> h` | Widget ảnh. Không có `w`/`h`: kích thước gốc theo dp (ảnh 96 px hiện 96 dp, phóng theo tỉ lệ màn hình). Có `w`/`h`: ảnh nằm trong khung, `fit` = `"contain"` (mặc định), `"cover"`, `"fill"`. `opa` 0-100 |
+| `set_image(h, path)` | Đổi ảnh |
+| `image_info(path) -> w, h` | Kích thước gốc (dp) |
+| `canvas(parent, w, h) -> h` | Vùng vẽ tay RGB565 (dp, tối đa 2048), nền đen |
+| `draw(h, {cmd, ...})` | Vẽ cả danh sách lệnh trong một lần gọi. Lệnh: `{"fill", color}`, `{"rect", x, y, w, h, color, radius}`, `{"line", x1, y1, x2, y2, color, width}`, `{"circle", cx, cy, r, color}`, `{"image", path, x, y}` (kích thước gốc theo pixel), `{"text", x, y, str, color, "small"\|"medium"\|"large"}`. Tọa độ dp, màu `0xRRGGBB` |
+
+Lỗi: `image not found: <path>`, `bad image: <path>`, `asset memory full`, `unknown draw command: <tên>`.
+
+Mẹo: lưu ảnh ở đúng kích thước sẽ hiển thị. Phóng to / thu nhỏ khi vẽ tốn CPU (màn JC8012P4A1C co giãn 150 %: ảnh
+dùng nhiều nên lưu sẵn ở kích thước pixel cuối cùng và đặt bằng `{w=, h=}`).
+
+### gach.game (SDK v8, manifest `sdk=8`)
+
+Engine 2D chạy native: C++ giữ mọi sprite, tự di chuyển theo vận tốc, chạy animation khung, kiểm tra chạm giữa
+các nhóm và **chỉ vẽ lại vùng có thay đổi**. Lua chỉ làm luật chơi trong `on_update` (mặc định 30 lần/giây). Một app
+có một scene; widget `gach.ui` đặt cạnh / chồng lên scene làm HUD.
+
+**Đơn vị trong gach.game là pixel của scene** (không phải dp): sprite vẽ 1:1, không tốn CPU phóng ảnh.
+
+| Hàm | Mô tả |
+| :--- | :--- |
+| `scene(parent, w, h, {bg=, fps=30}) -> h, w_px, h_px` | Tạo vùng chơi kích thước `w` x `h` dp; trả kích thước thật (px). `bg` = màu `0xRRGGBB` hoặc đường dẫn ảnh (lát kín). `fps` = nhịp `on_update` (10-60) |
+| `sheet(path, frame_w, frame_h) -> sheet` | Ảnh chia lưới khung (đánh số trái -> phải, trên -> dưới, từ 0). Tối đa 64 sheet |
+| `sprite({sheet=, frame=, x=, y=, w=, h=, color=, layer=, group=, vx=, vy=, opa=, visible=}) -> id` | Tạo sprite. Không có `sheet`: hình chữ nhật màu `color` kích thước `w` x `h`. `layer` 0-7 (cao vẽ sau; cùng lớp: y lớn vẽ sau). `group` 0-15 (chạm / chọn). `vx`, `vy` px/giây. `opa` 0-100 |
+| `set(id, {...}) -> bool` | Đổi nhiều thuộc tính một lần (cùng khóa như `sprite`); `false` nếu sprite không còn |
+| `get(id) -> x, y, frame, vx, vy` | Trạng thái hiện tại (`nil` nếu đã bị xóa) |
+| `alive(id) -> bool` | Sprite còn tồn tại |
+| `play(id, {from=, to=, fps=10, loop=true, done=fn})` | Animation khung native; `done(id)` khi chạy hết (chỉ khi `loop=false`) |
+| `move_to(id, x, y, ms, done)` | Đi thẳng tới điểm trong `ms`; `done(id)` khi tới |
+| `life(id, ms)` | Tự xóa sau `ms` (đạn, hiệu ứng) |
+| `remove(id)` / `clear()` | Xóa một / mọi sprite |
+| `on_overlap(group_a, group_b, fn)` | `fn(id_a, id_b)` khi một sprite nhóm a **bắt đầu** chạm sprite nhóm b (hình chữ nhật). `nil` = bỏ theo dõi. Tối đa 64 lần gọi mỗi tick (dư: tick sau) |
+| `on_touch(fn)` | `fn(phase, x, y)`: `phase` = `"down"`, `"move"`, `"up"`; tọa độ trong scene (px) |
+| `pick(x, y, group?) -> id \| nil` | Sprite trên cùng tại điểm (lọc theo nhóm) |
+| `on_update(fn)` | `fn(dt_ms)` mỗi nhịp logic |
+| `pause(bool)` | Dừng / chạy tiếp (app vào nền thì tự dừng) |
+| `stats() -> {sprites=, fps=, tick_us=, update_us=, draw_us=}` | Số đo: số sprite, khung hình/giây, thời gian một tick native, một lần `on_update`, một lần dựng lệnh vẽ |
+
+```lua
+local game = gach.game
+local _, W, H = game.scene(root, 800, 400, { bg = 0x101018 })
+local sheet = game.sheet("img/hero.png", 64, 64)      -- Ảnh 256x64: 4 khung
+local hero = game.sprite({ sheet = sheet, x = 20, y = H // 2, vx = 120, group = 1 })
+game.play(hero, { from = 0, to = 3, fps = 8 })
+game.on_update(function(dt)
+  local x, _, _, vx = game.get(hero)
+  if x > W - 64 or x < 0 then game.set(hero, { vx = -vx }) end
+end)
+```
+
+Lật hình: vẽ sẵn khung lật trong sheet (engine không lật ảnh khi vẽ). Hiệu năng trên JC8012P4A1C (`spritebench`):
+tick native 0,6 ms với 500 sprite; khung hình bị giới hạn bởi diện tích phải vẽ lại (~30 fps khi 100 sprite rải khắp
+màn, cao hơn khi chỉ một phần màn thay đổi).
+
 ### gach.timer
 
 | Hàm | Mô tả |
@@ -295,9 +362,11 @@ Thư viện Lua có sẵn: `string`, `table`, `math`, `utf8`, `coroutine` và c�
 | :--- | :--- | :--- |
 | RAM máy ảo | 1 MiB/app trong PSRAM (gồm cả runtime Lua) | Lỗi `not enough memory`, app hiện màn hình lỗi |
 | Thời gian mỗi lần gọi (callback, vòng đời) | 500 ms | Lỗi `script timeout` |
-| Widget | 256 / app (heap giao diện ~128 KiB chung: màn hình rất nhiều widget có thể hết trước) | Lỗi `too many UI objects` |
-| Sự kiện `ui.on` | 256 cặp (widget, loại) / app | Lỗi `too many event handlers` |
-| Timer | 8 / app | Lỗi `too many timers` |
+| Widget | 1024 / app (256 với firmware SDK <= 7; heap giao diện ~128 KiB chung: màn hình rất nhiều widget có thể hết trước) | Lỗi `too many UI objects` |
+| Sự kiện `ui.on` | 1024 cặp (widget, loại) / app | Lỗi `too many event handlers` |
+| Timer | 32 / app | Lỗi `too many timers` |
+| Ảnh / canvas (SDK v8) | 256 ảnh, tổng 8 MiB / app (gồm bộ đệm canvas) | Lỗi `asset memory full` |
+| Sprite `gach.game` (SDK v8) | 1024; 64 sheet; 16 nhóm; 8 lớp | Lỗi `too many sprites` |
 | App cài đồng thời | 128 | Báo lỗi `too many apps installed`, gói được giữ lại trong `/install` |
 | App script mở cùng lúc | 1 (mở app khác sẽ đóng app trước) | |
 
@@ -331,9 +400,11 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 - [`appstore/apps/world_clock`](../appstore/apps/world_clock): danh sách, `gach.sys.time()`, `gach.app.exit()`.
 - [`appstore/apps/game2048`](../appstore/apps/game2048) (SDK v3): game 2048 với `on_swipe`, bàn cờ vuông co giãn theo màn hình, lưu ván đang chơi và điểm cao nhất.
 - [`appstore/apps/pet`](../appstore/apps/pet) (SDK v6): Virtual Pet. 4 loài, trứng nở và lớn dần theo thời gian thật (tính bù cả lúc app đóng theo giờ NTP), tâm trạng thể hiện qua mắt / miệng / má, chạm & vuốt để tương tác. Nhân vật vẽ bằng `box` + `set_pos`, chuyển động bằng `animate` (nhịp thở, chớp mắt, nhảy, tim bay, Zzz), lưu trạng thái trong một khóa `gach.storage`.
-- [`appstore/apps/uikit`](../appstore/apps/uikit) (SDK v6): UI Kit, trưng bày nút nhiều kiểu, nhập liệu, sự kiện, alert/toast, hiệu ứng; dòng cuối hiện sự kiện vừa xảy ra.
+- [`appstore/apps/uikit`](../appstore/apps/uikit) (SDK v8): UI Kit, trưng bày nút nhiều kiểu, nhập liệu, sự kiện, alert/toast, hiệu ứng, ảnh và canvas (trang Images); dòng cuối hiện sự kiện vừa xảy ra.
 - [`appstore/apps/weather`](../appstore/apps/weather) (SDK v5): thời tiết qua Wi-Fi (Open-Meteo): nhiệt độ, cảm giác như, độ ẩm, gió, UV, xác suất mưa, dự báo theo giờ / 7 ngày, mặt trời mọc/lặn. Dùng `net.get`, `json.decode`, icon vẽ bằng `box` + `set_pos`.
 - [`appstore/apps/sysmon`](../appstore/apps/sysmon) (SDK v4): System Monitor. Dashboard tải CPU từng core, RAM/PSRAM/heap LVGL, firmware/thẻ SD, nhiệt độ, Wi-Fi, cập nhật mỗi giây bằng `gach.sys.stats()` cùng `arc`, `bar`, `chart`.
+- [`appstore/apps/coreguard`](../appstore/apps/coreguard) (SDK v8): Core Guard, game thủ thành theo làn. Robot đặt trên lưới 5x9 giữ lõi năng lượng trước đàn slime / bọ máy; 5 màn, lưu màn đã mở. Dùng `gach.game` (sprite sheet, animation, `on_overlap`, `pick`, `move_to`, `life`) và `ui.image` cho HUD. Đồ họa nguyên bản sinh bằng `tools/make_art.py` (thư mục `tools/` không đóng vào gói).
+- [`appstore/apps/spritebench`](../appstore/apps/spritebench) (SDK v8): đo engine – sprite nảy trong scene, tự tăng 100 -> 1000, ghi số đo vào log (`gach log filter bench`).
 - [`appstore/apps/calculator`](../appstore/apps/calculator) (SDK v3): máy tính kiểu điện thoại / máy tính bảng. Dùng `screen_size()` để chọn bố cục (màn rộng có thêm phím khoa học và lịch sử), lưu lịch sử bằng `gach.storage` dạng bộ đệm vòng, và vẽ ký hiệu `÷` bằng `box`.
 
 ## 6. Tương thích
@@ -347,6 +418,7 @@ Nâng cấp: chép bản mới (cùng `id`) vào `/install` rồi cài như trê
 | 5 | `net.get` (HTTP/HTTPS, quyền `network`), `json.decode`, `ui.set_pos` |
 | 6 | `ui.on`/`off` (đa sự kiện), nút `variant`/`size`/`icon`/`shape`, `textfield` + bàn phím hệ thống, `switch`, `checkbox`, `segmented`, `dropdown`, `spinner`, `get_value`/`get_text`, `set_enabled`/`set_visible`, `alert`, `toast`, `style`, `animate`, thêm `SYMBOL`; giới hạn 256 widget |
 | 7 | `gach.log.e/w/i/d/v` (log theo mức, tag = id app); `print` đi qua cùng bộ log |
+| 8 | Ảnh PNG trong gói (`ui.image`, `set_image`, `image_info`), `ui.canvas` + `ui.draw`, engine 2D `gach.game`; giới hạn 1024 widget / 1024 sự kiện / 32 timer (áp dụng cho mọi app) |
 
 - Runtime từ chối gói có `sdk` lớn hơn `gach.sdk_version` của máy.
 - API đã phát hành **không bao giờ bị xóa hay đổi nghĩa**; SDK mới chỉ thêm API. App viết cho `sdk=1` chạy được trên mọi bản gach-os về sau.

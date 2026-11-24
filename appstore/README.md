@@ -35,6 +35,8 @@ Cắm thẻ vào máy, rồi khởi động lại hoặc mở app **Apps** và n
 - Tăng `version` mỗi lần phát hành. Chỉ tăng `sdk` khi app dùng API của SDK mới hơn.
 - Mỗi app khai báo **tối thiểu** quyền cần thiết (`permissions=`).
 - Commit theo chuẩn dự án với scope là tên app, VD: `feat(calculator): ...`.
+- Ảnh để dạng **PNG** trong thư mục app (SDK v8); `pack` tự đổi sang `.gimg` cho board. Công cụ phát triển (VD script
+  sinh đồ họa) đặt trong thư mục `tools/` của app: không được đóng vào gói.
 
 ## index.json: danh mục cho kho ứng dụng
 
@@ -45,5 +47,8 @@ Cắm thẻ vào máy, rồi khởi động lại hoặc mở app **Apps** và n
 | App | SDK | Minh họa |
 | :--- | :---: | :--- |
 | [calculator](apps/calculator) | 2 | Máy tính bỏ túi kiểu điện thoại: lưới co giãn, nút tròn, ký hiệu vẽ tay |
+| [coreguard](apps/coreguard) | 8 | Game thủ thành theo làn: `gach.game` (sprite sheet, va chạm, chạm-chọn), ảnh PNG |
 | [counter](apps/counter) | 1 | UI, sự kiện, timer, `gach.storage` |
+| [spritebench](apps/spritebench) | 8 | Đo engine `gach.game`: 100 -> 1000 sprite, số đo ghi vào log |
+| [uikit](apps/uikit) | 8 | Mọi widget / sự kiện, ảnh và canvas |
 | [world_clock](apps/world_clock) | 1 | Danh sách, `gach.sys.time()`, `gach.app.exit()` |

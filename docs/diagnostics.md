@@ -55,7 +55,11 @@ Sổ lỗi nhận: reset bất thường (panic, watchdog, brownout... – kèm 
 (cài gói, quét app), lỗi script.
 
 Trace đang ghi: `ui/lv_timer_handler` (mỗi vòng UI), `ui/render` (một khung), `ui/flush` (giá trị = số pixel),
-`input/touch down|up` (giá trị = x), `app/open` (thời gian `on_create`).
+`input/touch down|up` (giá trị = x), `app/open` (thời gian `on_create`), `game/tick` (một bước thế giới sprite của
+`gach.game`), `game/lua_update` (một lần `on_update` của app), `game/draw` (dựng lệnh vẽ scene cho một dải).
+
+`uidiag` (không cần khóa UI) còn in vùng flush gần nhất và `PENDING` nếu một lần flush bất đồng bộ chưa báo xong:
+UI đứng mà thấy cùng một flush PENDING qua nhiều lần gọi là màn hình / PPA không trả lời.
 
 ## 4. Dùng trong code
 
