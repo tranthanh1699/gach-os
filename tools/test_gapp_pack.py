@@ -113,7 +113,29 @@ class GimgTest(unittest.TestCase):
         self.assertTrue(page_ok)
         cols = rows[1].split("\t")
         self.assertEqual(cols, ["org.t.demo", "Demo App", "1.2.0", "8", str(len(data)),
-                                __import__("hashlib").sha256(data).hexdigest(), "org.t.demo.gapp", "play", "#112233"])
+                                __import__("hashlib").sha256(data).hexdigest(), "org.t.demo.gapp", "play", "#112233",
+                                "", "", "0"])
+
+    def test_store_metadata_and_shots(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Path(tmp) / "app"
+            (app / "store").mkdir(parents=True)
+            (app / "main.lua").write_text("return {}\n")
+            (app / "manifest.ini").write_text("id=org.t.shot\nname=Shot\nversion=1\nsdk=8\n"
+                                              "description=Plays well. Two sentences.\ncategory=Games\n")
+            (app / "store" / "1.png").write_bytes(make_png(2, 2, 2, [bytes(6), bytes(6)]))
+            (app / "store" / "2.png").write_bytes(make_png(2, 2, 2, [bytes(6), bytes(6)]))
+            dist = Path(tmp) / "dist"
+            gapp_pack.pack(app, dist / "org.t.shot.gapp")
+            gapp_pack.write_index(dist)
+            with tarfile.open(dist / "org.t.shot.gapp") as tar:
+                names = tar.getnames()
+            cols = (dist / "index.tsv").read_text().splitlines()[1].split("\t")
+            shot = (dist / "shots" / "org.t.shot-1.gimg").read_bytes()
+            self.assertTrue((dist / "shots" / "org.t.shot-2.gimg").exists())
+        self.assertNotIn("store/1.png", names)
+        self.assertEqual(cols[9:], ["Plays well. Two sentences.", "Games", "2"])
+        self.assertEqual(shot[:4], b"GIMG")
 
 
 if __name__ == "__main__":

@@ -42,7 +42,8 @@ SDK_VERSION = read_sdk_version()
 ID_RE = re.compile(r"^[a-z0-9_-][a-z0-9._-]{0,30}$")
 MAX_PATH = 100  # Giới hạn tên trong header tar ustar (không dùng prefix cho đơn giản).
 EXCLUDE = {".DS_Store", "Thumbs.db"}
-EXCLUDE_DIRS = {"tools"}
+EXCLUDE_DIRS = {"tools", "store"}  # Công cụ phát triển / ảnh cho cửa hàng: không đóng vào gói.
+MAX_SHOTS = 3  # Ảnh chụp cửa hàng: store/1.png .. store/3.png -> dist/shots/<id>-<n>.gimg
 STORE_INDEX_FORMAT = 1  # Phiên bản định dạng dist/index.tsv (kho ứng dụng trên board đọc).  # Công cụ phát triển của app (VD script vẽ đồ họa): không đóng vào gói.
 
 # ---- PNG -> .gimg (ảnh nạp thẳng vào LVGL, board không cần giải PNG) ----
@@ -195,6 +196,18 @@ def validate(app_dir: Path) -> dict[str, str]:
     return m
 
 
+def write_shots(app_dir: Path, app_id: str, dist_dir: Path) -> None:
+    """Ảnh chụp cho Gach Store: store/<n>.png -> <dist>/shots/<id>-<n>.gimg (board tải khi mở trang chi tiết)."""
+    shots = dist_dir / "shots"
+    for old in shots.glob(f"{app_id}-*.gimg"):
+        old.unlink()
+    for n in range(1, MAX_SHOTS + 1):
+        png = app_dir / "store" / f"{n}.png"
+        if png.is_file():
+            shots.mkdir(parents=True, exist_ok=True)
+            (shots / f"{app_id}-{n}.gimg").write_bytes(png_to_gimg(png.read_bytes(), f"store/{n}.png"))
+
+
 def pack(app_dir: Path, output: Path) -> None:
     files = sorted(p for p in app_dir.rglob("*") if p.is_file() and p.name not in EXCLUDE
                    and p.relative_to(app_dir).parts[0] not in EXCLUDE_DIRS)
@@ -213,6 +226,9 @@ def pack(app_dir: Path, output: Path) -> None:
             info.mode = 0o644
             info.mtime = 0  # Gói tái lập: cùng nội dung -> cùng byte.
             tar.addfile(info, io.BytesIO(data))
+    app_id = parse_manifest(app_dir / "manifest.ini").get("id", "")
+    if app_id:
+        write_shots(app_dir, app_id, output.parent)
 
 
 def write_index(dist_dir: Path) -> Path:
@@ -236,15 +252,18 @@ def write_index(dist_dir: Path) -> Path:
             "sdk": int(fields.get("sdk", "0")), "icon": fields.get("icon", ""), "color": fields.get("color", ""),
             "permissions": [p.strip() for p in fields.get("permissions", "").split(",") if p.strip()],
             "file": package.name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+            "description": fields.get("description", ""), "category": fields.get("category", ""),
+            "shots": len(list((dist_dir / "shots").glob(f"{fields.get('id')}-*.gimg"))),
         })
     index = dist_dir / "index.json"
     index.write_text(json.dumps({"format": 1, "apps": apps}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     # Bản rút gọn cho board (đọc không cần bộ phân tích JSON): dòng đầu "#gach-store<TAB>định dạng", mỗi app một dòng
-    # id, name, version, sdk, size, sha256, file, icon, color (tách bằng TAB).
+    # id, name, version, sdk, size, sha256, file, icon, color, description, category, shots (tách bằng TAB).
+    # 3 cột cuối thêm sau: firmware cũ đọc 9 cột đầu và bỏ qua phần còn lại.
     lines = [f"#gach-store\t{STORE_INDEX_FORMAT}"]
     for a in apps:
         cols = [a["id"], a["name"], a["version"], str(a["sdk"]), str(a["size"]), a["sha256"], a["file"], a["icon"],
-                a["color"]]
+                a["color"], a["description"], a["category"], str(a["shots"])]
         if any("\t" in c or "\n" in c for c in cols):
             raise SystemExit(f"error: {a['file']}: manifest fields must not contain tabs / newlines")
         lines.append("\t".join(cols))
