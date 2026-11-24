@@ -13,10 +13,13 @@
 #include <cstdint>
 
 #include "common/status.hpp"
+#include "hal_api/filesystem.hpp"
 
 namespace hal {
 
 constexpr size_t HTTP_URL_MAX_LEN = 512U; /**< Kể cả '\0'. */
+constexpr size_t HTTP_SHA256_LEN = 32U;   /**< Byte của SHA-256 (download_sha256). */
+constexpr size_t HTTP_PATH_MAX_LEN = 128U; /**< Đường dẫn file đích của start_download (kể cả '\0'). */
 
 /** @brief Trạng thái của kênh yêu cầu duy nhất. */
 enum class HttpState : uint8_t {
@@ -58,6 +61,37 @@ public:
 
     /** @brief DONE -> IDLE (bỏ kết quả). Không làm gì ở trạng thái khác. */
     virtual void release() = 0;
+
+    /**
+     * @brief Bắt đầu GET và ghi thẳng body vào file (không qua bộ đệm body()): cho tệp lớn hơn capacity().
+     *        Cùng kênh yêu cầu với start_get(): state() / result() / release() như thường; result().body_len = số byte
+     *        đã ghi. Chỉ ghi body của phản hồi 200 (bỏ qua body của các bước chuyển hướng).
+     * @param[in] p_url  URL http:// hoặc https://.
+     * @param[in] fs     Filesystem đích (phải sống tới khi DONE).
+     * @param[in] p_path Đường dẫn file (tạo mới / ghi đè).
+     * @return ERR_STATE nếu chưa ở IDLE, ERR_PARAM nếu URL / đường dẫn sai, ERR_NOT_SUPPORTED nếu platform không hỗ trợ.
+     */
+    virtual common::Status start_download(const char* p_url, IFileSystem& fs, const char* p_path)
+    {
+        (void)p_url;
+        (void)fs;
+        (void)p_path;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+
+    /** @brief Tiến độ tải: đã nhận / tổng (0 nếu máy chủ không báo Content-Length). */
+    virtual void download_progress(size_t& received, size_t& total) const
+    {
+        received = 0U;
+        total = 0U;
+    }
+
+    /** @brief SHA-256 của dữ liệu đã ghi (chỉ có nghĩa khi DONE sau start_download). @return false nếu không có. */
+    virtual bool download_sha256(uint8_t (&out)[HTTP_SHA256_LEN]) const
+    {
+        (void)out;
+        return false;
+    }
 };
 
 } // namespace hal

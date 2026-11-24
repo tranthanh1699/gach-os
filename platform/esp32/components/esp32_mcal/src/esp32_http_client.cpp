@@ -10,6 +10,7 @@
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
+#include "psa/crypto.h"
 
 namespace esp32_mcal {
 
@@ -29,15 +30,25 @@ struct HttpEventBridge {
     {
         auto* const p_self = static_cast<Esp32HttpClient*>(p_event->user_data);
         if ((p_event->event_id == HTTP_EVENT_ON_DATA) && (p_self != nullptr)) {
-            p_self->append(p_event->data, static_cast<size_t>(p_event->data_len));
+            if (p_self->m_p_fs != nullptr) {
+                p_self->write_chunk(p_event->client, p_event->data, static_cast<size_t>(p_event->data_len));
+            } else {
+                p_self->append(p_event->data, static_cast<size_t>(p_event->data_len));
+            }
         }
         return ESP_OK;
     }
 };
 
+namespace {
+constexpr int HTTP_OK = 200;
+psa_hash_operation_t s_hash; /**< Một kênh yêu cầu duy nhất -> một phép băm. */
+} // namespace
+
 Esp32HttpClient::Esp32HttpClient()
     : m_p_body(nullptr), m_capacity(0U), m_url{}, m_result{}, m_p_start(nullptr), m_start_storage{},
-      m_state(static_cast<uint8_t>(hal::HttpState::IDLE))
+      m_state(static_cast<uint8_t>(hal::HttpState::IDLE)), m_p_fs(nullptr), m_path{}, m_file(hal::INVALID_FILE),
+      m_received(0U), m_total(0U), m_write_failed(false), m_has_digest(false), m_digest{}, m_p_hash(&s_hash)
 {
 }
 
@@ -67,6 +78,55 @@ common::Status Esp32HttpClient::init(size_t body_capacity)
 
 common::Status Esp32HttpClient::start_get(const char* p_url)
 {
+    return start(p_url, nullptr, nullptr);
+}
+
+common::Status Esp32HttpClient::start_download(const char* p_url, hal::IFileSystem& fs, const char* p_path)
+{
+    if ((p_path == nullptr) || (p_path[0] == '\0') || (std::strlen(p_path) >= sizeof(m_path))) {
+        return common::Status::ERR_PARAM;
+    }
+    return start(p_url, &fs, p_path);
+}
+
+void Esp32HttpClient::download_progress(size_t& received, size_t& total) const
+{
+    received = m_received.load();
+    total = m_total.load();
+}
+
+bool Esp32HttpClient::download_sha256(uint8_t (&out)[hal::HTTP_SHA256_LEN]) const
+{
+    if (!m_has_digest || (state() != hal::HttpState::DONE)) {
+        return false;
+    }
+    std::memcpy(out, m_digest, sizeof(out));
+    return true;
+}
+
+void Esp32HttpClient::write_chunk(void* p_client, const void* p_data, size_t len)
+{
+    auto* const p_http = static_cast<esp_http_client_handle_t>(p_client);
+    if (esp_http_client_get_status_code(p_http) != HTTP_OK) {
+        return; // Body của 3xx (chuyển hướng) / lỗi: không ghi vào file.
+    }
+    if (m_total.load() == 0U) {
+        const int64_t length = esp_http_client_get_content_length(p_http);
+        m_total.store((length > 0) ? static_cast<uint32_t>(length) : 0U);
+    }
+    if (m_write_failed) {
+        return;
+    }
+    if (!common::is_ok(m_p_fs->write(m_file, static_cast<const uint8_t*>(p_data), len))) {
+        m_write_failed = true;
+        return;
+    }
+    (void)psa_hash_update(static_cast<psa_hash_operation_t*>(m_p_hash), static_cast<const uint8_t*>(p_data), len);
+    m_received.fetch_add(static_cast<uint32_t>(len));
+}
+
+common::Status Esp32HttpClient::start(const char* p_url, hal::IFileSystem* p_fs, const char* p_path)
+{
     if ((p_url == nullptr) || (p_url[0] == '\0') || (std::strlen(p_url) >= sizeof(m_url))) {
         return common::Status::ERR_PARAM;
     }
@@ -77,6 +137,14 @@ common::Status Esp32HttpClient::start_get(const char* p_url)
     }
     std::strcpy(m_url, p_url);
     m_result = hal::HttpResult{common::Status::ERR_IO, 0, 0U, false};
+    m_p_fs = p_fs;
+    if (p_path != nullptr) {
+        std::strcpy(m_path, p_path);
+    }
+    m_received.store(0U);
+    m_total.store(0U);
+    m_write_failed = false;
+    m_has_digest = false;
     (void)xSemaphoreGive(m_p_start);
     return common::Status::OK;
 }
@@ -110,20 +178,44 @@ void Esp32HttpClient::perform()
     cfg.user_data = this;
     cfg.crt_bundle_attach = esp_crt_bundle_attach;
 
+    const bool is_download = (m_p_fs != nullptr);
+    if (is_download) {
+        if (!common::is_ok(m_p_fs->open(m_path, hal::OpenMode::WRITE, m_file))) {
+            m_result.status = common::Status::ERR_IO;
+            m_p_fs = nullptr;
+            return;
+        }
+        (void)psa_crypto_init(); // Gọi lại nhiều lần an toàn.
+        *static_cast<psa_hash_operation_t*>(m_p_hash) = psa_hash_operation_init();
+        (void)psa_hash_setup(static_cast<psa_hash_operation_t*>(m_p_hash), PSA_ALG_SHA_256);
+    }
     esp_http_client_handle_t p_client = esp_http_client_init(&cfg);
     if (p_client == nullptr) {
         m_result.status = common::Status::ERR_NO_MEM;
-        return;
-    }
-    const esp_err_t err = esp_http_client_perform(p_client);
-    if (err == ESP_OK) {
-        m_result.status = common::Status::OK;
-        m_result.http_code = esp_http_client_get_status_code(p_client);
     } else {
-        m_result.status = (err == ESP_ERR_HTTP_EAGAIN) ? common::Status::ERR_TIMEOUT : common::Status::ERR_IO;
-        ESP_LOGW(TAG, "GET failed: %s", esp_err_to_name(err));
+        const esp_err_t err = esp_http_client_perform(p_client);
+        if (err == ESP_OK) {
+            m_result.status = common::Status::OK;
+            m_result.http_code = esp_http_client_get_status_code(p_client);
+        } else {
+            m_result.status = (err == ESP_ERR_HTTP_EAGAIN) ? common::Status::ERR_TIMEOUT : common::Status::ERR_IO;
+            ESP_LOGW(TAG, "GET failed: %s", esp_err_to_name(err));
+        }
+        (void)esp_http_client_cleanup(p_client);
     }
-    (void)esp_http_client_cleanup(p_client);
+    if (is_download) {
+        m_p_fs->close(m_file);
+        m_file = hal::INVALID_FILE;
+        size_t digest_len = 0U;
+        m_has_digest = (psa_hash_finish(static_cast<psa_hash_operation_t*>(m_p_hash), m_digest, sizeof(m_digest),
+                                        &digest_len) == PSA_SUCCESS) &&
+                       (digest_len == sizeof(m_digest));
+        if (m_write_failed && common::is_ok(m_result.status)) {
+            m_result.status = common::Status::ERR_IO; // Thẻ đầy / lỗi ghi.
+        }
+        m_result.body_len = m_received.load();
+        m_p_fs = nullptr;
+    }
 }
 
 void Esp32HttpClient::task_entry(void* p_arg)

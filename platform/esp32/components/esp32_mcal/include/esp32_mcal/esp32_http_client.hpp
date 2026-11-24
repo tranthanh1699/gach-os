@@ -33,11 +33,16 @@ public:
     const uint8_t* body() const override { return m_p_body; }
     size_t capacity() const override { return m_capacity; }
     void release() override;
+    common::Status start_download(const char* p_url, hal::IFileSystem& fs, const char* p_path) override;
+    void download_progress(size_t& received, size_t& total) const override;
+    bool download_sha256(uint8_t (&out)[hal::HTTP_SHA256_LEN]) const override;
 
 private:
     static void task_entry(void* p_arg);
     void perform();
     void append(const void* p_data, size_t len);
+    void write_chunk(void* p_client, const void* p_data, size_t len);
+    common::Status start(const char* p_url, hal::IFileSystem* p_fs, const char* p_path);
 
     uint8_t* m_p_body;
     size_t m_capacity;
@@ -46,6 +51,16 @@ private:
     SemaphoreHandle_t m_p_start;
     StaticSemaphore_t m_start_storage;
     std::atomic<uint8_t> m_state;
+    // ---- Chế độ tải vào file (start_download) ----
+    hal::IFileSystem* m_p_fs;
+    char m_path[hal::HTTP_PATH_MAX_LEN];
+    hal::FileHandle m_file;
+    std::atomic<uint32_t> m_received;
+    std::atomic<uint32_t> m_total;
+    bool m_write_failed;
+    bool m_has_digest;
+    uint8_t m_digest[hal::HTTP_SHA256_LEN];
+    void* m_p_hash; /**< psa_hash_operation_t (giấu kiểu PSA khỏi header). */
 
     friend struct HttpEventBridge;
 };
