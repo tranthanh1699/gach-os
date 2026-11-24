@@ -57,6 +57,9 @@ void ui_diag(UiDiag& out);
 /** @return App manager toàn cục – dùng để đăng ký app trước khi start(). */
 AppManager& app_manager();
 
+/** @return Dịch vụ hệ thống toàn cục (thời gian, Wi-Fi, file...) – gọi khi giữ UiLock nếu dùng ngoài UI task. */
+Services& services();
+
 /**
  * @brief Khởi động OS: init thiết bị, LVGL, Shell, mở app home, tạo UI task.
  *

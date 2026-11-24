@@ -34,6 +34,19 @@ void bridge_for_each_log_line(LineFn fn, void* p_ctx);
  */
 bool bridge_app_command(uint8_t id, size_t argc, char* const p_args[], const hal::Devices& devices);
 
+/** @brief Phiên `gach` mới: thư mục hiện tại về "/". */
+void bridge_fs_begin_session(const hal::Devices& devices);
+
+/** @brief Đường dẫn người dùng (tương đối thư mục hiện tại / tuyệt đối) -> tương đối gốc thẻ. */
+bool bridge_fs_resolve(const char* p_in, char* p_out, size_t out_len);
+
+/**
+ * @brief Lệnh filesystem kiểu Linux (cd pwd ls mkdir rm rmdir cp mv cat head tail stat du df find grep touch tree
+ *        mount format).
+ * @return false nếu không phải lệnh của nhóm này.
+ */
+bool bridge_fs_command(uint8_t id, size_t argc, char* const p_args[], const hal::Devices& devices);
+
 /** @brief Gửi một dòng kết quả (khung TEXT) của lệnh id. */
 void bridge_text(uint8_t id, const char* p_text);
 

@@ -102,8 +102,14 @@ tools/gach shell
 
 ```
 gach> help
-info | mem | apps | ls [dir] | mkdir <dir> | rm <path>
-push <path> <size> | pull <path> | install | uninstall <id> | reboot
+  system  sysinfo version uptime cpuinfo coreinfo resetinfo bootinfo stats health reboot
+  memory  meminfo heap memmap
+  tasks   ps top taskinfo stack
+  apps    app list|info|inspect|status|launch|stop|restart|kill|enable|disable|install|uninstall|permissions|logs
+  files   cd pwd ls mkdir rm rmdir cp mv cat head tail stat touch du df find grep tree mount format push pull
+  logs    logcat dmesg loglevel
+  ui      home back perf uidiag
+gach> help files                                           ← cú pháp + mô tả từng lệnh của nhóm
 gach> apps
 org.gachos.calculator   2.0.0   Calculator
 org.gachos.g2048        1.0.1   2048
@@ -132,7 +138,13 @@ Trong shell, `install <file>`, `push <local> <remote>`, `pull <remote> [local]` 
 | `dmesg` | In lại 32 KiB log gần nhất, kể cả lúc khởi động / lúc chưa cắm máy |
 | `loglevel [tag] [n\|e\|w\|i\|d\|v]` | Xem / đổi mức log toàn cục hoặc theo tag (VD `loglevel org.gachos.weather d`) |
 | `shell` | Shell tương tác |
-| `ls [dir]` / `mkdir <dir>` / `rm <path>` | Thao tác thư mục / file trên thẻ |
+| `cd [dir]` / `pwd` | Thư mục hiện tại (giữ trong phiên shell; `/` = gốc thẻ, `..`, `~`). Mọi lệnh file + `push`/`pull` hiểu đường dẫn tương đối |
+| `ls [-l] [-a] [path]` / `tree [-L N] [-a] [path]` | Liệt kê (`-l`: kích thước + ngày sửa, `-a`: file ẩn) / cây thư mục |
+| `mkdir [-p]` / `rm [-r] [-f]` / `rmdir` / `cp [-r]` / `mv` / `touch` | Tạo / xóa / chép / chuyển-đổi tên / tạo file (cp -r, rm -r chạy từng bước, không làm đơ UI) |
+| `cat [-n]` / `head [-n N]` / `tail [-n N]` / `stat` | Đọc file chữ (cat tối đa 2000 dòng, file nhị phân thì từ chối) / thông tin file |
+| `du [-s] [path]` / `df` / `mount` | Dung lượng thư mục / thẻ / loại FAT, thẻ SDHC/SDXC, bus, sector, cluster |
+| `find [path] [-name '*.lua'] [-type f\|d]` / `grep [-i] [-n] [-r] <text> <path>` | Tìm file theo mẫu / tìm chữ trong file hoặc cả thư mục |
+| `format --yes` | **Xóa sạch thẻ** (mọi app cài thêm + dữ liệu), tạo lại `apps/` `install/` rồi khởi động lại |
 | `push <local> <remote>` / `pull <remote> [local\|-]` | Chép file lên / về |
 | `reboot` | Khởi động lại board |
 | `launch <app_id>` / `home` / `back` | Mở app / về màn hình chính / quay lại (điều khiển từ xa, test tự động) |

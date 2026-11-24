@@ -55,6 +55,18 @@ class CodecTest(unittest.TestCase):
         self.assertIsNone(gach.local_packages(["install"]))
         self.assertIsNone(gach.local_packages(["list"]))
 
+    def test_fs_command_line(self):
+        self.assertEqual(gach.fs_command_line("ls", ["-l", "apps"]), "ls -l apps")
+        self.assertEqual(gach.fs_command_line("head", ["-n", "20", "a.txt"]), "head -n 20 a.txt")
+        with self.assertRaises(SystemExit):
+            gach.fs_command_line("grep", ["two words", "x"])
+
+    def test_split_fs_invocation(self):
+        self.assertEqual(gach.split_fs_invocation(["ls", "-l", "/"], "/dev/x"), ("/dev/x", ["ls", "-l", "/"]))
+        self.assertEqual(gach.split_fs_invocation(["-p", "/dev/y", "head", "-n", "3", "f"], "/dev/x"),
+                         ("/dev/y", ["head", "-n", "3", "f"]))
+        self.assertIsNone(gach.split_fs_invocation(["info"], "/dev/x"))
+
     def test_raw_log_is_not_a_frame(self):
         self.assertIsNone(gach.decode_frame(b"I (123) main: OS started\r\n"))
 

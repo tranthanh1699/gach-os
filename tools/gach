@@ -17,7 +17,8 @@
   tools/gach shell                    Shell tương tác (gõ help)
   tools/gach push <local> <remote>    Chép file lên thẻ SD
   tools/gach pull <remote> [local]    Lấy file từ thẻ SD về
-  tools/gach ls [dir] | rm <path> | mkdir <dir> | mem | reboot
+  tools/gach ls [-l] [path] | cat <f> | head|tail [-n N] <f> | cp|mv <a> <b> | rm [-r] <p> | mkdir [-p] <d>
+  tools/gach stat | du | df | find [p] -name '*.lua' | grep [-r] <text> <p> | tree | touch | mount | mem | reboot
   tools/gach launch <app_id> | home | back   Điều khiển app từ xa (test tự động)
   tools/gach perf [reset|bench]       Hiệu năng vẽ LVGL: fps, thời gian khung, phần flush; bench = vẽ lại cả màn 20 lần
 
@@ -380,6 +381,19 @@ def do_pull(link: Link, remote: str, local: str | None) -> int:
     return 0 if ok else 1
 
 
+FS_COMMANDS = ("ls", "cd", "pwd", "mkdir", "rm", "rmdir", "cp", "mv", "cat", "head", "tail", "stat", "du", "df",
+               "find", "grep", "touch", "tree", "mount", "format")
+
+
+def fs_command_line(cmd: str, args: list[str]) -> str:
+    """Ghép lệnh file gửi xuống board; tham số có dấu cách (VD mẫu grep) được giữ nguyên trong một từ không được
+    hỗ trợ bởi board (tách theo dấu cách) -> báo lỗi sớm thay vì gửi sai."""
+    for arg in args:
+        if " " in arg:
+            raise SystemExit(f"gach: arguments with spaces are not supported: {arg!r}")
+    return " ".join([cmd, *args])
+
+
 SYS_COMMANDS = ("sysinfo", "version", "uptime", "cpuinfo", "coreinfo", "meminfo", "memmap", "ps", "stack",
                 "resetinfo", "bootinfo", "stats", "health")
 
@@ -410,13 +424,37 @@ def loglevel_command(args: list[str]) -> str | None:
     return " ".join(["loglevel", *args])
 
 
+def split_fs_invocation(argv: list[str], default_port: str) -> tuple[str, list[str]] | None:
+    """`gach [-p PORT] <lệnh file> <tham số...>`: trả (port, [lệnh, tham số...]) để chuyển nguyên văn xuống board
+    (argparse không cho tham số bắt đầu bằng '-' như `ls -l`, `head -n 3`). None nếu không phải lệnh file."""
+    port = default_port
+    rest = list(argv)
+    if len(rest) >= 2 and rest[0] in ("-p", "--port"):
+        port, rest = rest[1], rest[2:]
+    if rest and rest[0] in FS_COMMANDS:
+        return port, rest
+    return None
+
+
 def main() -> int:
+    fs_call = split_fs_invocation(sys.argv[1:], os.environ.get("GACH_PORT", "/dev/ttyUSB0"))
+    if fs_call is not None:
+        port, words = fs_call
+        link = open_link(argparse.Namespace(port=port))
+        try:
+            return run_simple(link, fs_command_line(words[0], words[1:]))
+        finally:
+            link.close()
+
     parser = argparse.ArgumentParser(prog="gach", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-p", "--port", default=os.environ.get("GACH_PORT", "/dev/ttyUSB0"))
     sub = parser.add_subparsers(dest="cmd", required=True)
     for name in ("info", "mem", "apps", "reboot", "shell", "devices", "home", "back", "dmesg", *SYS_COMMANDS):
         sub.add_parser(name)
     sub.add_parser("top", help="task CPU realtime (Ctrl-C để thoát)").add_argument("rows", nargs="?", default="")
+    for name in FS_COMMANDS:
+        sub.add_parser(name, help="lệnh file kiểu Linux (xem: gach help files)").add_argument(
+            "args", nargs=argparse.REMAINDER)
     sub.add_parser("help", help="lệnh của board: help [nhóm|lệnh]").add_argument("topic", nargs="?", default="")
     app = sub.add_parser("app", help="quản lý app: app list|info|inspect|status|launch|stop|restart|kill|enable|"
                                       "disable|install|uninstall|permissions|logs")
@@ -430,9 +468,6 @@ def main() -> int:
     loglevel.add_argument("args", nargs="*")
     sub.add_parser("launch").add_argument("app")
     sub.add_parser("perf").add_argument("reset", nargs="?", choices=["reset", "bench"])
-    sub.add_parser("ls").add_argument("dir", nargs="?", default="")
-    sub.add_parser("rm").add_argument("path")
-    sub.add_parser("mkdir").add_argument("path")
     sub.add_parser("uninstall").add_argument("id")
     sub.add_parser("install").add_argument("files", nargs="+")
     push = sub.add_parser("push")
@@ -473,10 +508,8 @@ def main() -> int:
             return run_simple(link, f"launch {args.app}")
         if args.cmd == "perf":
             return run_simple(link, f"perf {args.reset or ''}".strip())
-        if args.cmd == "ls":
-            return run_simple(link, f"ls {args.dir}".strip())
-        if args.cmd in ("rm", "mkdir"):
-            return run_simple(link, f"{args.cmd} {args.path}")
+        if args.cmd in FS_COMMANDS:
+            return run_simple(link, fs_command_line(args.cmd, args.args))
         if args.cmd == "uninstall":
             return run_simple(link, f"uninstall {args.id}")
         if args.cmd == "install":

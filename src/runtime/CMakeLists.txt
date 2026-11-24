@@ -2,6 +2,7 @@
 # Phụ thuộc: framework + HAL contract (filesystem) + OSAL + LVGL + Lua. Không SDK chip.
 idf_component_register(SRCS "src/arena_allocator.cpp"
                             "src/bridge_app.cpp"
+                            "src/bridge_fs.cpp"
                             "src/bridge_sys.cpp"
                             "src/debug_bridge.cpp"
                             "src/fs_utils.cpp"

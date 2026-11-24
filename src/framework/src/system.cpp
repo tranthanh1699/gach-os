@@ -149,6 +149,11 @@ AppManager& app_manager()
     return s_apps;
 }
 
+Services& services()
+{
+    return s_services;
+}
+
 common::Status start(const hal::Devices& devices)
 {
     if (s_is_started) {

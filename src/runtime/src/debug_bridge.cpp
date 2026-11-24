@@ -52,7 +52,7 @@ constexpr size_t MAX_PAYLOAD = HEADER_BYTES + MAX_DATA + CRC_BYTES;
 constexpr size_t MAX_ENCODED = MAX_PAYLOAD + (MAX_PAYLOAD / 254U) + 2U;
 constexpr size_t RX_LINE_MAX = MAX_ENCODED + 8U;      /**< Khung dài hơn -> rác, bỏ qua. */
 constexpr size_t TEXT_BUF_LEN = 200U;
-constexpr size_t CMD_ARGS_MAX = 4U;
+constexpr size_t CMD_ARGS_MAX = 12U; /**< Lệnh + tham số (VD grep -n -i -r <text> <path>). */
 constexpr uint8_t BYTE_MASK = 0xFFU;
 constexpr uint8_t BYTE_SHIFT = 8U;
 
@@ -156,15 +156,6 @@ hal::IFileSystem* filesystem()
     return ((p_fs != nullptr) && p_fs->is_mounted()) ? p_fs : nullptr;
 }
 
-/** @brief Đường dẫn trên thẻ: bỏ '/' ở đầu (HAL dùng đường dẫn tương đối gốc thẻ). */
-const char* fs_path(const char* p_path)
-{
-    while ((p_path != nullptr) && (*p_path == '/')) {
-        ++p_path;
-    }
-    return p_path;
-}
-
 // ============================================================================
 // Lệnh
 // ============================================================================
@@ -207,7 +198,19 @@ const HelpEntry HELP[] = {
     {"apps", "app uninstall <id>", "remove an installed app and its data"},
     {"apps", "app permissions <id>", "what the app is allowed to use"},
     {"apps", "app logs <id> [n]", "last n log lines of an app (default 40)"},
-    {"files", "ls [dir] | mkdir <dir> | rm <path>", "SD card files (paths relative to the card root)"},
+    {"files", "cd [dir] | pwd", "change / show the current directory (/ = card root, .., ~)"},
+    {"files", "ls [-l] [-a] [path]", "list a directory (-l details, -a hidden files)"},
+    {"files", "mkdir [-p] <dir>", "create a directory (-p: with parents)"},
+    {"files", "rm [-r] [-f] <path>... | rmdir <dir>", "remove files / folders (-r recursive) / an empty folder"},
+    {"files", "cp [-r] <src> <dst> | mv <src> <dst>", "copy (-r folders) / move or rename"},
+    {"files", "cat [-n] <file>", "print a text file (-n line numbers, max 2000 lines)"},
+    {"files", "head [-n N] <file> | tail [-n N] <file>", "first / last N lines (default 10)"},
+    {"files", "stat <path> | touch <file>", "file details / create or update a file"},
+    {"files", "du [-s] [path] | df", "size of a folder per entry / card usage"},
+    {"files", "find [path] [-name '*.lua'] [-type f|d]", "find files by name pattern"},
+    {"files", "grep [-i] [-n] [-r] <text> <path>", "search text in a file / folder (-r)"},
+    {"files", "tree [-L N] [-a] [path]", "folder tree (-L max depth, -a hidden)"},
+    {"files", "mount | format --yes", "card / filesystem info / ERASE the whole card"},
     {"files", "push <local> <remote>", "[pc] copy a file to the card"},
     {"files", "pull <remote> [local|-]", "[pc] copy a file from the card"},
     {"logs", "logcat [-f]", "[pc] log history then live log (-f: live only)"},
@@ -385,52 +388,6 @@ void cmd_apps(uint8_t id)
     send_resp(id, true, text);
 }
 
-struct ListContext {
-    uint8_t id;
-    size_t count;
-};
-
-bool list_entry(const hal::DirEntry& entry, void* p_ctx)
-{
-    auto* const p_list = static_cast<ListContext*>(p_ctx);
-    char text[TEXT_BUF_LEN];
-    (void)std::snprintf(text, sizeof(text), "%s%s", entry.name, entry.is_dir ? "/" : "");
-    send_text(p_list->id, text);
-    ++p_list->count;
-    return true;
-}
-
-void cmd_ls(uint8_t id, const char* p_path)
-{
-    hal::IFileSystem* const p_fs = filesystem();
-    if (p_fs == nullptr) {
-        send_resp(id, false, "no sd card");
-        return;
-    }
-    ListContext ctx{id, 0U};
-    common::Status status = common::Status::OK;
-    {
-        fw::UiLock lock;
-        status = p_fs->list_dir(fs_path((p_path != nullptr) ? p_path : ""), &list_entry, &ctx);
-    }
-    send_resp(id, common::is_ok(status), common::is_ok(status) ? nullptr : "cannot list directory");
-}
-
-void cmd_simple_fs(uint8_t id, const char* p_cmd, const char* p_path)
-{
-    hal::IFileSystem* const p_fs = filesystem();
-    if ((p_fs == nullptr) || (p_path == nullptr)) {
-        send_resp(id, false, (p_fs == nullptr) ? "no sd card" : "missing path");
-        return;
-    }
-    common::Status status = common::Status::OK;
-    {
-        fw::UiLock lock;
-        status = (std::strcmp(p_cmd, "rm") == 0) ? p_fs->remove(fs_path(p_path)) : p_fs->make_dir(fs_path(p_path));
-    }
-    send_resp(id, common::is_ok(status), common::is_ok(status) ? nullptr : "failed");
-}
-
 void close_push()
 {
     hal::IFileSystem* const p_fs = filesystem();
@@ -453,7 +410,10 @@ void cmd_push(uint8_t id, const char* p_path, const char* p_size)
     common::Status status = common::Status::OK;
     {
         fw::UiLock lock;
-        status = p_fs->open(fs_path(p_path), hal::OpenMode::WRITE, s_push_handle);
+        char resolved[hal::FS_PATH_MAX_LEN + 1U];
+        status = bridge_fs_resolve(p_path, resolved, sizeof(resolved))
+                     ? p_fs->open(resolved, hal::OpenMode::WRITE, s_push_handle)
+                     : common::Status::ERR_PARAM;
     }
     if (!common::is_ok(status)) {
         s_push_handle = hal::INVALID_FILE;
@@ -507,7 +467,9 @@ void cmd_pull(uint8_t id, const char* p_path)
     common::Status status = common::Status::OK;
     {
         fw::UiLock lock;
-        status = p_fs->open(fs_path(p_path), hal::OpenMode::READ, handle);
+        char resolved[hal::FS_PATH_MAX_LEN + 1U];
+        status = bridge_fs_resolve(p_path, resolved, sizeof(resolved)) ? p_fs->open(resolved, hal::OpenMode::READ, handle)
+                                                                         : common::Status::ERR_PARAM;
     }
     if (!common::is_ok(status)) {
         send_resp(id, false, "cannot open file");
@@ -761,10 +723,6 @@ void on_command(const Frame& frame)
         cmd_mem(id);
     } else if (std::strcmp(p_cmd, "apps") == 0) {
         cmd_apps(id);
-    } else if (std::strcmp(p_cmd, "ls") == 0) {
-        cmd_ls(id, p_arg1);
-    } else if ((std::strcmp(p_cmd, "rm") == 0) || (std::strcmp(p_cmd, "mkdir") == 0)) {
-        cmd_simple_fs(id, p_cmd, p_arg1);
     } else if (std::strcmp(p_cmd, "push") == 0) {
         cmd_push(id, p_arg1, p_arg2);
     } else if (std::strcmp(p_cmd, "pull") == 0) {
@@ -795,6 +753,8 @@ void on_command(const Frame& frame)
         send_resp(id, true, "rebooting");
         osal::delay_ms(REBOOT_DELAY_MS);
         s_p_devices->p_system->restart();
+    } else if (bridge_fs_command(id, argc, args, *s_p_devices)) {
+        // Lệnh filesystem (bridge_fs.cpp) – thay ls / mkdir / rm cũ.
     } else if (bridge_app_command(id, argc, args, *s_p_devices)) {
         // Lệnh `app ...` (bridge_app.cpp).
     } else if (bridge_sys_command(id, argc, args, *s_p_devices)) {
@@ -846,6 +806,9 @@ bool read_frame(Frame& frame, uint32_t timeout_ms)
             s_rx_overflow = false;
             if (is_frame) {
                 s_last_rx_ms = osal::tick_ms();
+                if (!s_is_session) {
+                    bridge_fs_begin_session(*s_p_devices); // Phiên mới: thư mục hiện tại về "/".
+                }
                 s_is_session = true;
                 return true;
             }

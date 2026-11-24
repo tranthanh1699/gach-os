@@ -17,7 +17,7 @@ tools/gach loglevel wifi d                      # đổi mức log lúc chạy (
 tools/gach shell                                # shell tương tác, gõ help
 tools/gach push notes.txt apps/foo/notes.txt    # chép lên thẻ (đường dẫn tương đối gốc thẻ)
 tools/gach pull apps/foo/data.ini -             # lấy file về (- = in ra stdout)
-tools/gach ls apps | rm <path> | mkdir <dir> | info | mem | reboot
+tools/gach ls -l apps | cat <file> | grep -r <text> apps | tree -L 2 | df | info | mem | reboot
 tools/gach launch settings | home | back      # điều khiển app từ xa (test tự động)
 tools/gach perf bench                           # đo vẽ lại toàn màn 20 lần (fps, thời gian khung)
 tools/gach help                                 # lệnh theo nhóm; help apps / help heap: chi tiết
