@@ -60,6 +60,15 @@ struct UiDiag {
 /** @param[out] out Trạng thái task UI hiện tại. */
 void ui_diag(UiDiag& out);
 
+/**
+ * @brief Chạm giả (debug bridge `gach input`, test tự động): khi is_active, LVGL đọc điểm này thay cho màn cảm ứng.
+ *        An toàn gọi từ task khác (UI đọc ở lần quét touch kế tiếp, ~16 ms).
+ * @param[in] is_active  false = trả quyền cho cảm ứng thật.
+ * @param[in] x, y       Tọa độ logic (pixel màn hình).
+ * @param[in] is_pressed Đang nhấn.
+ */
+void input_inject(bool is_active, int32_t x, int32_t y, bool is_pressed);
+
 /** @return App manager toàn cục – dùng để đăng ký app trước khi start(). */
 AppManager& app_manager();
 

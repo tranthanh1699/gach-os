@@ -232,6 +232,9 @@ const HelpEntry HELP[] = {
     {"diag", "crash dump [file]", "[pc] copy the core dump to the computer and decode it"},
     {"diag", "watchdog info", "task / interrupt watchdog settings"},
     {"ui", "home | back", "press Home / Back"},
+    {"ui", "input tap x y | input press x y [ms]", "fake touch: tap / long press at screen pixel (1280x800)"},
+    {"ui", "input swipe x1 y1 x2 y2 [ms]", "fake swipe (scroll, change page)"},
+    {"ui", "input drag x1 y1 x2 y2 [hold_ms] [ms]", "long press then drag (move an icon)"},
     {"ui", "screenshot [scale] [file.png]", "[pc] capture the screen (scale 1-8, default 4 = 320x200) to a PNG"},
     {"ui", "perf [reset|bench]", "redraw statistics / full-screen redraw benchmark"},
     {"ui", "uidiag", "UI task state (works even when the UI hangs)"},
@@ -776,6 +779,8 @@ void on_command(const Frame& frame)
         s_p_devices->p_system->restart();
     } else if (bridge_fs_command(id, argc, args, *s_p_devices)) {
         // Lệnh filesystem (bridge_fs.cpp) – thay ls / mkdir / rm cũ.
+    } else if (bridge_input_command(id, argc, args)) {
+        // Chạm giả (bridge_input.cpp).
     } else if (bridge_store_command(id, argc, args)) {
         // Kho trực tuyến (bridge_store.cpp).
     } else if (bridge_app_command(id, argc, args, *s_p_devices)) {

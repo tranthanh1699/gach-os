@@ -59,6 +59,12 @@ bool bridge_diag_command(uint8_t id, size_t argc, char* const p_args[], const ha
  */
 bool bridge_store_command(uint8_t id, size_t argc, char* const p_args[]);
 
+/**
+ * @brief Chạm giả (`input tap|press|swipe|drag`).
+ * @return false nếu không phải lệnh `input`.
+ */
+bool bridge_input_command(uint8_t id, size_t argc, char* const p_args[]);
+
 /** @brief Gửi một dòng kết quả (khung TEXT) của lệnh id. */
 void bridge_text(uint8_t id, const char* p_text);
 

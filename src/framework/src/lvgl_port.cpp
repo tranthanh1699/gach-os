@@ -21,6 +21,10 @@ uint32_t s_render_start_us = 0U;
 } // namespace
 
 volatile uint32_t s_diag_phase = DIAG_PHASE_IDLE;
+volatile bool s_inject_active = false; /**< Chạm giả từ task khác (input_inject). */
+volatile bool s_inject_pressed = false;
+volatile int32_t s_inject_x = 0;
+volatile int32_t s_inject_y = 0;
 uint32_t s_band_lines = 1U; /**< Số dòng một dải vẽ (buffer / chiều rộng): mốc căn vùng vẽ lại khi flush async. */
 volatile int32_t s_flush_area[4] = {0, 0, 0, 0};
 volatile uint32_t s_flush_count = 0U;
@@ -132,6 +136,14 @@ void LvglPort::flush_cb(lv_display_t* p_disp, const lv_area_t* p_area, uint8_t* 
     lv_display_flush_ready(p_disp);
 }
 
+void input_inject(bool is_active, int32_t x, int32_t y, bool is_pressed)
+{
+    s_inject_x = x;
+    s_inject_y = y;
+    s_inject_pressed = is_active && is_pressed;
+    s_inject_active = is_active; // Ghi sau cùng: UI không đọc điểm cũ.
+}
+
 void LvglPort::invalidate_event_cb(lv_event_t* p_event)
 {
     auto* const p_area = static_cast<lv_area_t*>(lv_event_get_param(p_event));
@@ -158,7 +170,14 @@ void LvglPort::touch_read_cb(lv_indev_t* p_indev, lv_indev_data_t* p_data)
     auto* const p_self = static_cast<LvglPort*>(lv_indev_get_user_data(p_indev));
     hal::TouchPoint point{};
     diag_set_phase(DIAG_PHASE_TOUCH);
-    const bool is_pressed = common::is_ok(p_self->m_p_touch->read(point)) && point.pressed;
+    bool is_pressed = false;
+    if (s_inject_active) { // Chạm giả (gach input) thay cảm ứng thật.
+        point.x = static_cast<uint16_t>(s_inject_x);
+        point.y = static_cast<uint16_t>(s_inject_y);
+        is_pressed = s_inject_pressed;
+    } else {
+        is_pressed = common::is_ok(p_self->m_p_touch->read(point)) && point.pressed;
+    }
     static bool s_was_pressed = false; // Một indev cảm ứng: chỉ ghi trace lúc đổi trạng thái.
     if (is_pressed != s_was_pressed) {
         s_was_pressed = is_pressed;

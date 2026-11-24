@@ -426,7 +426,7 @@ def do_top(link: Link, rows: str = "") -> int:
 
 
 # ---- Chẩn đoán (log / trace / event / fault / crash / watchdog / diagnose) ----
-DIAG_COMMANDS = ("log", "trace", "event", "fault", "crash", "watchdog", "diagnose", "store", "screenshot")
+DIAG_COMMANDS = ("log", "trace", "event", "fault", "crash", "watchdog", "diagnose", "store", "screenshot", "input")
 SHOT_REMOTE = "screenshots/shot.gshot"
 TRACE_DUMP_TIMEOUT_S = 120.0  # 8192 bản ghi ~ 160 KB qua 115200 baud ~ 15 s.
 EVENT_POLL_S = 1.0
