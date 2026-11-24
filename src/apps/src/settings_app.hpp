@@ -11,6 +11,7 @@
 #include <cstdint>
 
 #include "framework/app.hpp"
+#include "runtime/runtime.hpp"
 
 namespace apps {
 
@@ -30,6 +31,8 @@ private:
         NONE,
         DISPLAY,
         DATE_TIME,
+        APPS,       /**< Danh sách app cài thêm. */
+        APP_DETAIL, /**< Thông tin + xóa một app (m_app_id). */
         ABOUT
     };
 
@@ -58,6 +61,8 @@ private:
     void build_display(lv_obj_t* p_page);
     void build_date_time(lv_obj_t* p_page);
     void build_about(lv_obj_t* p_page);
+    void build_apps(lv_obj_t* p_page);
+    void build_app_detail(lv_obj_t* p_page);
     void forget_page_widgets();
     void highlight_menu();
     void refresh();
@@ -71,6 +76,10 @@ private:
     static void on_display_clicked(lv_event_t* p_event);
     static void on_date_time_clicked(lv_event_t* p_event);
     static void on_about_clicked(lv_event_t* p_event);
+    static void on_apps_clicked(lv_event_t* p_event);
+    static void on_app_row_clicked(lv_event_t* p_event);
+    static void on_delete_app_clicked(lv_event_t* p_event);
+    static void on_delete_app_confirm(lv_event_t* p_event);
     static void on_restart_clicked(lv_event_t* p_event);
     static void on_brightness_changed(lv_event_t* p_event);
     static void on_perf_overlay_changed(lv_event_t* p_event);
@@ -80,7 +89,7 @@ private:
     static void on_timer(lv_timer_t* p_timer);
     static void apply_pending_page(void* p_arg);
 
-    static constexpr size_t MENU_PAGE_COUNT = 3U; /**< DISPLAY, DATE_TIME, ABOUT. */
+    static constexpr size_t MENU_PAGE_COUNT = 4U; /**< DISPLAY, DATE_TIME, APPS, ABOUT. */
 
     lv_obj_t* m_p_root;
     lv_obj_t* m_p_detail;            /**< Khung chi tiết (màn lớn) – nội dung thay khi chọn mục. */
@@ -92,6 +101,7 @@ private:
     lv_obj_t* m_p_timezone;
     lv_obj_t* m_p_about[ABOUT_ROW_COUNT];
     lv_obj_t* m_p_dialog;
+    char m_app_id[runtime::PACKAGE_ID_BUF_LEN]; /**< App đang xem ở trang APP_DETAIL. */
     lv_timer_t* m_p_timer;
     Page m_page;
     Page m_pending_page; /**< Trang chờ dựng (hoãn ra ngoài callback chạm: dòng được chạm có thể bị xóa). */

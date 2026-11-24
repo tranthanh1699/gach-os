@@ -46,6 +46,8 @@ constexpr uint32_t ICON_WIFI = 0x0A84FFU;
 constexpr uint32_t ICON_DISPLAY = 0x5E5CE6U;
 constexpr uint32_t ICON_DATE_TIME = 0xFF9F0AU;
 constexpr uint32_t ICON_ABOUT = 0x8E8E93U;
+constexpr uint32_t ICON_APPS = 0x30D158U;
+constexpr uint32_t ICON_APP = 0x0A84FFU;
 
 // Các múi giờ đang dùng trên thế giới (phút so với UTC), gồm cả múi lẻ :30 / :45.
 constexpr int16_t TIMEZONES_MIN[] = {
@@ -109,7 +111,7 @@ void set_value(lv_obj_t* p_label, const char* p_text)
 SettingsApp::SettingsApp()
     : fw::App(INFO), m_p_root(nullptr), m_p_detail(nullptr), m_p_menu_rows{}, m_p_wifi_value(nullptr),
       m_p_brightness_value(nullptr), m_p_time_value(nullptr), m_p_sync_value(nullptr), m_p_timezone(nullptr),
-      m_p_about{}, m_p_dialog(nullptr), m_p_timer(nullptr), m_page(Page::NONE), m_pending_page(Page::NONE),
+      m_p_about{}, m_p_dialog(nullptr), m_app_id{}, m_p_timer(nullptr), m_page(Page::NONE), m_pending_page(Page::NONE),
       m_is_split(false)
 {
 }
@@ -161,6 +163,8 @@ void SettingsApp::build_menu(lv_obj_t* p_parent)
     m_p_menu_rows[1] = lv_obj_get_parent(
         glist::row(p_general, LV_SYMBOL_BELL, ICON_DATE_TIME, "Date & Time", &SettingsApp::on_date_time_clicked, this));
     m_p_menu_rows[2] = lv_obj_get_parent(
+        glist::row(p_general, LV_SYMBOL_DOWNLOAD, ICON_APPS, "Apps", &SettingsApp::on_apps_clicked, this));
+    m_p_menu_rows[3] = lv_obj_get_parent(
         glist::row(p_general, LV_SYMBOL_LIST, ICON_ABOUT, "About", &SettingsApp::on_about_clicked, this));
 
     glist::section_header(p_parent, nullptr);
@@ -174,7 +178,9 @@ void SettingsApp::show_menu()
     // Chỉ dùng ở màn nhỏ: danh sách chiếm cả màn.
     forget_page_widgets();
     lv_obj_clean(m_p_root);
-    m_p_menu_rows[0] = m_p_menu_rows[1] = m_p_menu_rows[2] = nullptr;
+    for (lv_obj_t*& p_row : m_p_menu_rows) {
+        p_row = nullptr;
+    }
     m_page = Page::NONE;
     lv_obj_t* const p_page = glist::page(m_p_root);
     lv_obj_set_size(p_page, LV_PCT(100), LV_PCT(100));
@@ -201,7 +207,9 @@ lv_obj_t* SettingsApp::begin_detail(const char* p_title)
     if (!m_is_split) {
         lv_obj_clean(m_p_root); // Màn nhỏ: trang chi tiết thay danh sách.
         m_p_wifi_value = nullptr;
-        m_p_menu_rows[0] = m_p_menu_rows[1] = m_p_menu_rows[2] = nullptr;
+        for (lv_obj_t*& p_row : m_p_menu_rows) {
+        p_row = nullptr;
+    }
         p_container = m_p_root;
     } else {
         lv_obj_clean(m_p_detail);
@@ -221,6 +229,12 @@ void SettingsApp::show_page(Page page)
         break;
     case Page::DATE_TIME:
         build_date_time(begin_detail("Date & Time"));
+        break;
+    case Page::APPS:
+        build_apps(begin_detail("Apps"));
+        break;
+    case Page::APP_DETAIL:
+        build_app_detail(begin_detail("Apps"));
         break;
     case Page::ABOUT:
         build_about(begin_detail("About"));
@@ -256,13 +270,13 @@ void SettingsApp::apply_pending_page(void* p_arg)
 void SettingsApp::highlight_menu()
 {
     // Sidebar iPad: dòng của trang đang mở tô màu nhấn.
-    static constexpr Page PAGES[MENU_PAGE_COUNT] = {Page::DISPLAY, Page::DATE_TIME, Page::ABOUT};
+    static constexpr Page PAGES[MENU_PAGE_COUNT] = {Page::DISPLAY, Page::DATE_TIME, Page::APPS, Page::ABOUT};
     for (size_t index = 0U; index < MENU_PAGE_COUNT; ++index) {
         lv_obj_t* const p_row = m_p_menu_rows[index];
         if (p_row == nullptr) {
             continue;
         }
-        const bool is_active = (PAGES[index] == m_page);
+        const bool is_active = (PAGES[index] == m_page) || ((PAGES[index] == Page::APPS) && (m_page == Page::APP_DETAIL));
         lv_obj_set_style_bg_color(p_row, lv_color_hex(glist::COLOR_ACCENT), 0);
         lv_obj_set_style_bg_opa(p_row, is_active ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
     }
@@ -387,6 +401,10 @@ bool SettingsApp::on_back()
 {
     if ((m_p_dialog != nullptr) || ((m_p_timezone != nullptr) && lv_dropdown_is_open(m_p_timezone))) {
         close_popups();
+        return true;
+    }
+    if (m_page == Page::APP_DETAIL) {
+        show_page(Page::APPS); // Chi tiết app -> danh sách app.
         return true;
     }
     if (!m_is_split && (m_page != Page::NONE)) {
@@ -528,6 +546,108 @@ void SettingsApp::on_display_clicked(lv_event_t* p_event)
 void SettingsApp::on_date_time_clicked(lv_event_t* p_event)
 {
     static_cast<SettingsApp*>(lv_event_get_user_data(p_event))->request_page(Page::DATE_TIME);
+}
+
+// ============================================================================
+// Apps: danh sách app cài thêm, thông tin, xóa
+// ============================================================================
+void SettingsApp::build_apps(lv_obj_t* p_page)
+{
+    if (!runtime::is_available()) {
+        glist::section_header(p_page, nullptr);
+        (void)glist::row(glist::group(p_page), LV_SYMBOL_WARNING, glist::COLOR_DESTRUCTIVE, "No SD card", nullptr,
+                         nullptr);
+        return;
+    }
+    const size_t count = runtime::package_count();
+    char header[48];
+    (void)std::snprintf(header, sizeof(header), "INSTALLED APPS  (%u)", static_cast<unsigned>(count));
+    glist::section_header(p_page, header);
+    lv_obj_t* const p_group = glist::group(p_page);
+    for (size_t index = 0U; index < count; ++index) {
+        runtime::PackageView view{};
+        runtime::PackageDetails details{};
+        if (!runtime::package_at(index, view) || !runtime::package_details(view.p_id, details)) {
+            continue;
+        }
+        lv_obj_t* const p_value = glist::row(p_group, runtime::app_icon_symbol(details.p_icon), ICON_APP, view.p_name,
+                                             &SettingsApp::on_app_row_clicked, this);
+        lv_label_set_text_fmt(p_value, "v%s", view.p_version);
+        lv_obj_set_user_data(lv_obj_get_parent(p_value), reinterpret_cast<void*>(static_cast<uintptr_t>(index)));
+    }
+    if (count == 0U) {
+        (void)glist::row(p_group, nullptr, 0U, "No apps installed - get some in Gach Store", nullptr, nullptr);
+    }
+    glist::section_header(p_page, "Built-in apps (Settings, Files, Gach Store...) cannot be deleted.");
+}
+
+void SettingsApp::build_app_detail(lv_obj_t* p_page)
+{
+    runtime::PackageDetails details{};
+    if (!runtime::package_details(m_app_id, details)) {
+        glist::section_header(p_page, "This app is no longer installed.");
+        return;
+    }
+    glist::section_header(p_page, nullptr);
+    lv_obj_t* const p_head = glist::group(p_page);
+    lv_label_set_text_fmt(glist::row(p_head, runtime::app_icon_symbol(details.p_icon), ICON_APP, details.p_name,
+                                     nullptr, nullptr),
+                          "v%s", details.p_version);
+
+    glist::section_header(p_page, "INFORMATION");
+    lv_obj_t* const p_info = glist::group(p_page);
+    lv_label_set_text(glist::row(p_info, nullptr, 0U, "Identifier", nullptr, nullptr), details.p_id);
+    lv_label_set_text_fmt(glist::row(p_info, nullptr, 0U, "Requires", nullptr, nullptr), "SDK %u",
+                          static_cast<unsigned>(details.sdk));
+    lv_label_set_text(glist::row(p_info, nullptr, 0U, "Storage access", nullptr, nullptr),
+                      details.can_storage ? "Yes" : "No");
+    lv_label_set_text(glist::row(p_info, nullptr, 0U, "Network access", nullptr, nullptr),
+                      details.can_network ? "Yes" : "No");
+
+    glist::section_header(p_page, nullptr);
+    (void)glist::action_row(glist::group(p_page), "Delete App", glist::COLOR_DESTRUCTIVE,
+                            &SettingsApp::on_delete_app_clicked, this);
+    glist::section_header(p_page, "Deleting removes the app and all of its data. You can get it again from Gach Store.");
+}
+
+void SettingsApp::on_apps_clicked(lv_event_t* p_event)
+{
+    static_cast<SettingsApp*>(lv_event_get_user_data(p_event))->request_page(Page::APPS);
+}
+
+void SettingsApp::on_app_row_clicked(lv_event_t* p_event)
+{
+    auto* const p_self = static_cast<SettingsApp*>(lv_event_get_user_data(p_event));
+    const auto index = static_cast<size_t>(
+        reinterpret_cast<uintptr_t>(lv_obj_get_user_data(lv_event_get_current_target_obj(p_event))));
+    runtime::PackageView view{};
+    if (runtime::package_at(index, view)) {
+        (void)common::copy_string(p_self->m_app_id, sizeof(p_self->m_app_id), view.p_id);
+        p_self->request_page(Page::APP_DETAIL);
+    }
+}
+
+void SettingsApp::on_delete_app_clicked(lv_event_t* p_event)
+{
+    auto* const p_self = static_cast<SettingsApp*>(lv_event_get_user_data(p_event));
+    runtime::PackageDetails details{};
+    if ((p_self->m_p_dialog != nullptr) || !runtime::package_details(p_self->m_app_id, details)) {
+        return;
+    }
+    char title[48];
+    (void)std::snprintf(title, sizeof(title), "Delete \"%s\"?", details.p_name);
+    p_self->m_p_dialog = fw::alert::show(
+        title, "The app and all of its data will be removed from this device.",
+        fw::alert::Action{"Cancel", fw::alert::COLOR_CANCEL, &SettingsApp::on_dialog_cancel},
+        fw::alert::Action{"Delete", fw::alert::COLOR_DESTRUCTIVE, &SettingsApp::on_delete_app_confirm}, p_self);
+}
+
+void SettingsApp::on_delete_app_confirm(lv_event_t* p_event)
+{
+    auto* const p_self = static_cast<SettingsApp*>(lv_event_get_user_data(p_event));
+    p_self->close_popups();
+    (void)runtime::uninstall(p_self->m_app_id); // App đang mở: runtime từ chối (last_error), danh sách vẫn đúng.
+    p_self->request_page(Page::APPS);
 }
 
 void SettingsApp::on_about_clicked(lv_event_t* p_event)
