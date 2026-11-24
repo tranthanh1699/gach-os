@@ -24,6 +24,8 @@ class LauncherApp final : public fw::App {
 public:
     static constexpr size_t MIN_TILES_PER_PAGE = 8U; /**< Sàn số icon/trang (4x2) -> chặn trên số trang. */
     static constexpr size_t MAX_PAGES = (fw::config::MAX_APPS + MIN_TILES_PER_PAGE - 1U) / MIN_TILES_PER_PAGE;
+    static constexpr size_t MAX_GRID_COLUMNS = 8U; /**< Màn rất rộng: giữ khoảng thở giữa icon thay vì nhồi cột. */
+    static constexpr size_t MAX_GRID_ROWS = 4U;
 
     LauncherApp();
     void on_create(lv_obj_t* p_root) override;
@@ -32,12 +34,12 @@ public:
 
 private:
     void build_pages();
-    size_t compute_tiles_per_page() const;
+    size_t compute_tiles_per_page(); /**< Đặt m_columns / m_rows theo vùng hiển thị. */
     void show_page(size_t page);
     void populate(size_t page);
     void update_indicator();
     void refresh_if_changed();
-    void create_tile(lv_obj_t* p_parent, fw::App& target);
+    void create_tile(lv_obj_t* p_parent, fw::App& target, size_t slot);
 
     static void on_tile_clicked(lv_event_t* p_event);
     static void on_page_changed(lv_event_t* p_event);
@@ -51,6 +53,10 @@ private:
     fw::App* m_visible[fw::config::MAX_APPS];
     size_t m_visible_count;
     size_t m_tiles_per_page;
+    size_t m_columns; /**< Cột của lưới icon (mọi trang cùng lưới: icon thẳng hàng giữa các hàng). */
+    size_t m_rows;
+    int32_t m_col_dsc[MAX_GRID_COLUMNS + 1U]; /**< Mô tả lưới LVGL (giữ con trỏ: phải sống cùng launcher). */
+    int32_t m_row_dsc[MAX_GRID_ROWS + 1U];
     size_t m_page_count;
     size_t m_active_page;
     lv_timer_t* m_p_timer;

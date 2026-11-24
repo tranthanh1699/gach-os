@@ -13,7 +13,8 @@ namespace {
 
 constexpr fw::AppInfo INFO{"launcher", "Home", LV_SYMBOL_HOME, 0x2F81F7U, false};
 // Kích thước theo dp (theme::px đổi sang pixel thật).
-constexpr int32_t TILE_WIDTH = 72;
+constexpr int32_t TILE_WIDTH = 88;   /**< dp: đủ cho từ dài như "Calculator" ở cỡ chữ nhỏ. */
+constexpr int32_t NAME_LINES = 2;    /**< Tên tối đa 2 dòng (ngắt theo từ), dư thì "...". */
 constexpr int32_t ICON_SIZE = 52;
 constexpr int32_t ICON_RADIUS = 14;
 constexpr int32_t GRID_GAP = 6;
@@ -21,8 +22,6 @@ constexpr int32_t TILE_ROW_GAP = 4;
 constexpr int32_t DOT_SIZE = 6;
 constexpr int32_t DOT_GAP = 6;
 constexpr int32_t INDICATOR_HEIGHT = 12;
-constexpr size_t MAX_COLUMNS = 8U; /**< Màn rất rộng: giữ khoảng thở giữa các icon thay vì nhồi thêm cột. */
-constexpr size_t MAX_ROWS = 4U;
 constexpr uint32_t DOT_ACTIVE = 0xE6EDF3U;
 constexpr uint32_t DOT_INACTIVE = 0x484F58U;
 constexpr uint32_t REGISTRY_CHECK_MS = 1000U; // App có thể được cài/gỡ khi launcher đang hiển thị.
@@ -64,6 +63,9 @@ void init_styles()
 
     lv_style_init(&s_style_name);
     lv_style_set_width(&s_style_name, fw::theme::px(TILE_WIDTH));
+    // Chiều cao cố định 2 dòng: LONG_DOT chỉ cắt ("...") khi có chiều cao; mọi ô cao bằng nhau nên hàng thẳng.
+    lv_style_set_text_font(&s_style_name, fw::theme::font_small());
+    lv_style_set_height(&s_style_name, NAME_LINES * lv_font_get_line_height(fw::theme::font_small()));
     lv_style_set_text_align(&s_style_name, LV_TEXT_ALIGN_CENTER);
     lv_style_set_text_color(&s_style_name, lv_color_hex(fw::theme::COLOR_TEXT));
     s_styles_ready = true;
@@ -78,7 +80,7 @@ size_t page_of(lv_obj_t* p_page)
 
 LauncherApp::LauncherApp()
     : fw::App(INFO), m_p_tileview(nullptr), m_p_indicator(nullptr), m_pages{}, m_visible{}, m_visible_count(0U),
-      m_tiles_per_page(MIN_TILES_PER_PAGE), m_page_count(0U), m_active_page(0U), m_p_timer(nullptr),
+      m_tiles_per_page(MIN_TILES_PER_PAGE), m_columns(1U), m_rows(1U), m_col_dsc{}, m_row_dsc{}, m_page_count(0U), m_active_page(0U), m_p_timer(nullptr),
       m_built_generation(0U), m_is_paused(false)
 {
 }
@@ -164,6 +166,15 @@ void LauncherApp::build_pages()
 
     lv_obj_clean(m_p_tileview);
     m_tiles_per_page = compute_tiles_per_page();
+    // Lưới: cột chia đều (icon căn giữa trong cột), hàng cao theo nội dung.
+    for (size_t col = 0U; col < m_columns; ++col) {
+        m_col_dsc[col] = LV_GRID_FR(1);
+    }
+    m_col_dsc[m_columns] = LV_GRID_TEMPLATE_LAST;
+    for (size_t row = 0U; row < m_rows; ++row) {
+        m_row_dsc[row] = LV_GRID_CONTENT;
+    }
+    m_row_dsc[m_rows] = LV_GRID_TEMPLATE_LAST;
     m_page_count = (m_visible_count == 0U) ? 1U : ((m_visible_count + m_tiles_per_page - 1U) / m_tiles_per_page);
     for (size_t page = 0U; page < m_page_count; ++page) {
         lv_obj_t* const p_page = lv_tileview_add_tile(m_p_tileview, static_cast<uint8_t>(page), 0U, LV_DIR_HOR);
@@ -171,8 +182,9 @@ void LauncherApp::build_pages()
         lv_obj_set_style_pad_all(p_page, fw::theme::px(GRID_GAP), 0);
         lv_obj_set_style_pad_row(p_page, fw::theme::px(GRID_GAP), 0);
         lv_obj_set_style_pad_column(p_page, fw::theme::px(GRID_GAP), 0);
-        lv_obj_set_flex_flow(p_page, LV_FLEX_FLOW_ROW_WRAP);
-        lv_obj_set_flex_align(p_page, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+        // Lưới cột chia đều (không phải flex wrap): hàng thiếu icon vẫn thẳng cột với hàng trên.
+        lv_obj_set_grid_dsc_array(p_page, m_col_dsc, m_row_dsc);
+        lv_obj_set_layout(p_page, LV_LAYOUT_GRID);
         lv_obj_set_scrollable(p_page, false); // Chỉ tileview cuộn (ngang).
         m_pages[page] = p_page;
     }
@@ -192,7 +204,7 @@ void LauncherApp::build_pages()
     show_page(page);
 }
 
-size_t LauncherApp::compute_tiles_per_page() const
+size_t LauncherApp::compute_tiles_per_page()
 {
     // Diện tích lưới = tileview (đã layout) trừ lề trang; mỗi ô = icon + khoảng + 1 dòng tên.
     lv_obj_update_layout(m_p_tileview);
@@ -201,13 +213,20 @@ size_t LauncherApp::compute_tiles_per_page() const
     const int32_t area_h = lv_obj_get_content_height(m_p_tileview) - gap;
     const int32_t tile_w = fw::theme::px(TILE_WIDTH) + gap;
     const int32_t tile_h = fw::theme::px(ICON_SIZE) + fw::theme::px(TILE_ROW_GAP) +
-                           lv_font_get_line_height(fw::theme::font_small()) + gap;
+                           (NAME_LINES * lv_font_get_line_height(fw::theme::font_small())) + gap;
     size_t cols = (area_w > 0) ? static_cast<size_t>(area_w / tile_w) : 0U;
     size_t rows = (area_h > 0) ? static_cast<size_t>(area_h / tile_h) : 0U;
-    cols = (cols > MAX_COLUMNS) ? MAX_COLUMNS : cols;
-    rows = (rows > MAX_ROWS) ? MAX_ROWS : rows;
-    const size_t tiles = cols * rows;
-    return (tiles < MIN_TILES_PER_PAGE) ? MIN_TILES_PER_PAGE : tiles;
+    cols = (cols > MAX_GRID_COLUMNS) ? MAX_GRID_COLUMNS : ((cols == 0U) ? 1U : cols);
+    rows = (rows > MAX_GRID_ROWS) ? MAX_GRID_ROWS : ((rows == 0U) ? 1U : rows);
+    if ((cols * rows) < MIN_TILES_PER_PAGE) { // Màn quá nhỏ: giữ sàn số icon/trang (giới hạn số trang).
+        rows = (MIN_TILES_PER_PAGE + cols - 1U) / cols;
+        rows = (rows > MAX_GRID_ROWS) ? MAX_GRID_ROWS : rows;
+        cols = (MIN_TILES_PER_PAGE + rows - 1U) / rows;
+        cols = (cols > MAX_GRID_COLUMNS) ? MAX_GRID_COLUMNS : cols;
+    }
+    m_columns = cols;
+    m_rows = rows;
+    return cols * rows;
 }
 
 void LauncherApp::show_page(size_t page)
@@ -232,7 +251,7 @@ void LauncherApp::populate(size_t page)
     }
     const size_t first = page * m_tiles_per_page;
     for (size_t index = first; (index < m_visible_count) && (index < (first + m_tiles_per_page)); ++index) {
-        create_tile(p_page, *m_visible[index]);
+        create_tile(p_page, *m_visible[index], index - first);
     }
 }
 
@@ -246,7 +265,7 @@ void LauncherApp::update_indicator()
     }
 }
 
-void LauncherApp::create_tile(lv_obj_t* p_parent, fw::App& target)
+void LauncherApp::create_tile(lv_obj_t* p_parent, fw::App& target, size_t slot)
 {
     // Tile = container clickable; con của nó không clickable để click luôn rơi vào tile.
     lv_obj_t* const p_tile = lv_obj_create(p_parent);
@@ -256,6 +275,8 @@ void LauncherApp::create_tile(lv_obj_t* p_parent, fw::App& target)
     lv_obj_set_clickable(p_tile, true);
     lv_obj_set_user_data(p_tile, &target);
     lv_obj_add_event_cb(p_tile, &LauncherApp::on_tile_clicked, LV_EVENT_CLICKED, this);
+    lv_obj_set_grid_cell(p_tile, LV_GRID_ALIGN_CENTER, static_cast<int32_t>(slot % m_columns), 1, LV_GRID_ALIGN_START,
+                         static_cast<int32_t>(slot / m_columns), 1);
 
     lv_obj_t* const p_icon = lv_obj_create(p_tile);
     lv_obj_remove_style_all(p_icon);
