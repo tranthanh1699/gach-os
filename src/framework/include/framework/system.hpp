@@ -49,6 +49,12 @@ struct UiDiag {
     uint32_t loop_count;     /**< Số vòng lặp UI đã chạy. */
     uint32_t phase;          /**< 0 ngủ, 1 lv_timer_handler, 2 vẽ, 3 flush, 4 đọc touch. */
     uint32_t phase_since_ms; /**< Thời điểm vào phase hiện tại. */
+    int32_t flush_x1;        /**< Vùng flush gần nhất (tọa độ logic). */
+    int32_t flush_y1;
+    int32_t flush_x2;
+    int32_t flush_y2;
+    uint32_t flush_count;    /**< Số lần flush đã gửi. */
+    bool flush_pending;      /**< Flush bất đồng bộ đã gửi mà chưa báo xong. */
 };
 
 /** @param[out] out Trạng thái task UI hiện tại. */

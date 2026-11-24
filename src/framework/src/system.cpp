@@ -145,6 +145,12 @@ void ui_diag(UiDiag& out)
     out.loop_count = s_diag_loops;
     out.phase = s_diag_phase;
     out.phase_since_ms = s_diag_phase_ms;
+    out.flush_x1 = s_flush_area[0];
+    out.flush_y1 = s_flush_area[1];
+    out.flush_x2 = s_flush_area[2];
+    out.flush_y2 = s_flush_area[3];
+    out.flush_count = s_flush_count;
+    out.flush_pending = s_flush_pending;
 }
 
 AppManager& app_manager()

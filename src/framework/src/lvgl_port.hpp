@@ -22,6 +22,9 @@ constexpr uint32_t DIAG_PHASE_FLUSH = 3U;
 constexpr uint32_t DIAG_PHASE_TOUCH = 4U;
 extern volatile uint32_t s_diag_phase;
 extern volatile uint32_t s_diag_phase_ms;
+extern volatile int32_t s_flush_area[4]; /**< Vùng flush gần nhất (x1, y1, x2, y2). */
+extern volatile uint32_t s_flush_count;
+extern volatile bool s_flush_pending;    /**< Flush bất đồng bộ chưa báo xong. */
 void diag_set_phase(uint32_t phase);
 
 /** @brief Gắn display/touch của HAL vào LVGL. Chỉ có 1 instance (tĩnh) trong framework. */
@@ -46,6 +49,7 @@ private:
     static void touch_read_cb(lv_indev_t* p_indev, lv_indev_data_t* p_data);
     static uint32_t tick_cb();
     static void render_event_cb(lv_event_t* p_event);
+    static void invalidate_event_cb(lv_event_t* p_event); /**< Kéo vùng vẽ lại ra full chiều rộng (flush async). */
 
     hal::IDisplay* m_p_display;
     hal::ITouch* m_p_touch;

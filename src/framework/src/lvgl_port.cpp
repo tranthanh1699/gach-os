@@ -21,6 +21,10 @@ uint32_t s_render_start_us = 0U;
 } // namespace
 
 volatile uint32_t s_diag_phase = DIAG_PHASE_IDLE;
+uint32_t s_band_lines = 1U; /**< Số dòng một dải vẽ (buffer / chiều rộng): mốc căn vùng vẽ lại khi flush async. */
+volatile int32_t s_flush_area[4] = {0, 0, 0, 0};
+volatile uint32_t s_flush_count = 0U;
+volatile bool s_flush_pending = false;
 volatile uint32_t s_diag_phase_ms = 0U;
 
 void diag_set_phase(uint32_t phase)
@@ -66,6 +70,16 @@ common::Status LvglPort::init(hal::IDisplay& display, hal::ITouch* p_touch, cons
     lv_display_set_user_data(m_p_lv_display, this);
     lv_display_add_event_cb(m_p_lv_display, &LvglPort::render_event_cb, LV_EVENT_RENDER_START, nullptr);
     lv_display_add_event_cb(m_p_lv_display, &LvglPort::render_event_cb, LV_EVENT_RENDER_READY, nullptr);
+    s_band_lines = static_cast<uint32_t>(p_buffers[0].size) / (display.width() * sizeof(uint16_t));
+    s_band_lines = (s_band_lines == 0U) ? 1U : s_band_lines;
+    if (m_is_async) {
+        // Flush bất đồng bộ (ESP32-P4: PPA xoay vào framebuffer): khối hẹp mà cao (VD 288x71) có thể làm PPA treo
+        // vĩnh viễn (lỗi phần cứng DIG-734, workaround của IDF chưa che hết) -> LVGL chờ flush mãi, UI đứng. Dải
+        // full chiều rộng nhưng mỏng (VD 1280x6, gặp khi kết thúc màn game) cũng treo.
+        // Mọi vùng vẽ lại được căn ra full chiều rộng và theo bội số dòng của buffer: mọi khối flush đều đúng
+        // kích thước dải chuẩn (1280x16 trên JC8012P4A1C), dạng đã chạy ổn qua mọi phép đo hiệu năng.
+        lv_display_add_event_cb(m_p_lv_display, &LvglPort::invalidate_event_cb, LV_EVENT_INVALIDATE_AREA, nullptr);
+    }
     s_perf_window_start_ms = osal::tick_ms();
 
     if (m_p_touch != nullptr) {
@@ -91,7 +105,13 @@ void LvglPort::flush_cb(lv_display_t* p_disp, const lv_area_t* p_area, uint8_t* 
     diag_set_phase(DIAG_PHASE_FLUSH);
     TRACE_INSTANT("ui", "flush", static_cast<int32_t>(lv_area_get_size(p_area)));
     const uint32_t start_us = osal::time_us();
+    s_flush_area[0] = area.x1;
+    s_flush_area[1] = area.y1;
+    s_flush_area[2] = area.x2;
+    s_flush_area[3] = area.y2;
+    s_flush_count = s_flush_count + 1U;
     if (p_self->m_is_async) {
+        s_flush_pending = true;
         // Trả về ngay: LVGL vẽ dải kế tiếp vào buffer kia; on_flush_done (ISR) báo flush_ready.
         const common::Status status = p_self->m_p_display->draw_bitmap_async(
             area, reinterpret_cast<const uint16_t*>(p_px_map), &LvglPort::on_flush_done, p_disp);
@@ -99,6 +119,7 @@ void LvglPort::flush_cb(lv_display_t* p_disp, const lv_area_t* p_area, uint8_t* 
         ++s_perf.flush_count;
         s_perf.flushed_px += static_cast<uint32_t>(lv_area_get_size(p_area));
         if (!common::is_ok(status)) {
+            s_flush_pending = false;
             lv_display_flush_ready(p_disp); // Lỗi khởi động: không để LVGL chờ mãi.
         }
         return;
@@ -111,8 +132,24 @@ void LvglPort::flush_cb(lv_display_t* p_disp, const lv_area_t* p_area, uint8_t* 
     lv_display_flush_ready(p_disp);
 }
 
+void LvglPort::invalidate_event_cb(lv_event_t* p_event)
+{
+    auto* const p_area = static_cast<lv_area_t*>(lv_event_get_param(p_event));
+    lv_display_t* const p_disp = static_cast<lv_display_t*>(lv_event_get_target(p_event));
+    const int32_t band = static_cast<int32_t>(s_band_lines);
+    const int32_t last_row = lv_display_get_vertical_resolution(p_disp) - 1;
+    p_area->x1 = 0;
+    p_area->x2 = lv_display_get_horizontal_resolution(p_disp) - 1;
+    // Mép trên / dưới theo bội số dòng của buffer: LVGL chia vùng thành dải `band` dòng tính từ y1, nên mọi lần
+    // flush đều là khối đủ chiều rộng x `band` dòng (không còn dải mỏng 6 dòng làm PPA treo).
+    p_area->y1 = (p_area->y1 / band) * band;
+    const int32_t y2 = ((p_area->y2 / band) + 1) * band - 1;
+    p_area->y2 = (y2 > last_row) ? last_row : y2;
+}
+
 void LvglPort::on_flush_done(void* p_ctx)
 {
+    s_flush_pending = false;
     lv_display_flush_ready(static_cast<lv_display_t*>(p_ctx)); // Chỉ đặt cờ: an toàn khi gọi từ ISR.
 }
 

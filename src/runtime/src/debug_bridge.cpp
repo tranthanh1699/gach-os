@@ -757,9 +757,12 @@ void on_command(const Frame& frame)
         fw::UiDiag diag{};
         fw::ui_diag(diag); // Không khóa: đọc được cả khi UI treo.
         char text[TEXT_BUF_LEN];
-        (void)std::snprintf(text, sizeof(text), "loops=%u phase=%u for=%ums", static_cast<unsigned>(diag.loop_count),
-                            static_cast<unsigned>(diag.phase),
-                            static_cast<unsigned>(osal::tick_ms() - diag.phase_since_ms));
+        (void)std::snprintf(text, sizeof(text), "loops=%u phase=%u for=%ums flush#%u (%ld,%ld)-(%ld,%ld)%s",
+                            static_cast<unsigned>(diag.loop_count), static_cast<unsigned>(diag.phase),
+                            static_cast<unsigned>(osal::tick_ms() - diag.phase_since_ms),
+                            static_cast<unsigned>(diag.flush_count), static_cast<long>(diag.flush_x1),
+                            static_cast<long>(diag.flush_y1), static_cast<long>(diag.flush_x2),
+                            static_cast<long>(diag.flush_y2), diag.flush_pending ? " PENDING" : "");
         send_resp(id, true, text);
     } else if (std::strcmp(p_cmd, "perf") == 0) {
         cmd_perf(id, p_arg1);
