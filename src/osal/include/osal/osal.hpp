@@ -26,6 +26,12 @@ uint32_t tick_ms();
 /** @return Số micro-giây kể từ khi khởi động (đo hiệu năng; wrap-around sau ~71 phút). */
 uint32_t time_us();
 
+/** @return Core đang chạy lời gọi (0 với chip một core). */
+uint8_t current_core();
+
+/** @return Tên task đang chạy (con trỏ ổn định suốt đời task, không cần chép). */
+const char* current_task_name();
+
 /**
  * @brief Nhường CPU cho task khác trong khoảng thời gian chỉ định.
  * @param[in] ms Thời gian chờ (ms). 0 = chỉ yield.

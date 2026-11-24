@@ -34,6 +34,10 @@ public:
     common::Status heap_trace_stop() override;
     common::Status heap_trace_status(size_t& count, size_t& bytes, bool& is_running) const override;
     common::Status heap_trace_get(size_t index, hal::HeapTraceRecord& record) const override;
+    common::Status crash_summary(hal::CrashSummary& summary) const override;
+    common::Status crash_read(size_t offset, uint8_t* p_buf, size_t len, size_t& got) const override;
+    common::Status crash_erase() override;
+    common::Status get_watchdog_info(hal::WatchdogInfo& info) const override;
 
 private:
     /** @brief Lấy mẫu bộ đếm idle mỗi core và tính tải (gọi trong vùng khóa). */

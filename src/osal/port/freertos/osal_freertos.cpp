@@ -35,6 +35,16 @@ uint32_t time_us()
     return static_cast<uint32_t>(esp_timer_get_time());
 }
 
+uint8_t current_core()
+{
+    return static_cast<uint8_t>(xPortGetCoreID());
+}
+
+const char* current_task_name()
+{
+    return pcTaskGetName(nullptr);
+}
+
 void delay_ms(uint32_t ms)
 {
     vTaskDelay(to_ticks(ms));

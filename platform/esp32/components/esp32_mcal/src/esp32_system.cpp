@@ -13,6 +13,7 @@
 #include "driver/temperature_sensor.h"
 #include "esp_app_desc.h"
 #include "esp_attr.h"
+#include "esp_core_dump.h"
 #include "esp_heap_trace.h"
 #include "esp_mac.h"
 #include "esp_psram.h"
@@ -517,5 +518,135 @@ common::Status Esp32System::heap_trace_get(size_t index, hal::HeapTraceRecord& r
     return common::Status::ERR_NOT_SUPPORTED;
 }
 #endif
+
+// ============================================================================
+// Chẩn đoán lỗi
+// ============================================================================
+#if CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH
+namespace {
+
+/** @brief Tên ngoại lệ CPU (mã mcause chuẩn RISC-V). */
+const char* exception_name(uint32_t cause)
+{
+#if CONFIG_IDF_TARGET_ARCH_RISCV
+    static const char* const NAMES[] = {
+        "instruction address misaligned", "instruction access fault", "illegal instruction", "breakpoint",
+        "load address misaligned", "load access fault (bad pointer read)", "store address misaligned",
+        "store access fault (bad pointer write)", "ecall (U)", "ecall (S)", "reserved", "ecall (M)",
+        "instruction page fault", "load page fault", "reserved", "store page fault"};
+    constexpr uint32_t INTERRUPT_BIT = 0x80000000U;
+    if ((cause & INTERRUPT_BIT) != 0U) {
+        return "interrupt (watchdog / ISR)";
+    }
+    return (cause < (sizeof(NAMES) / sizeof(NAMES[0]))) ? NAMES[cause] : "unknown exception";
+#else
+    (void)cause;
+    return "unknown";
+#endif
+}
+
+} // namespace
+
+common::Status Esp32System::crash_summary(hal::CrashSummary& out) const
+{
+    out = hal::CrashSummary{};
+    size_t addr = 0U;
+    size_t size = 0U;
+    if ((esp_core_dump_image_check() != ESP_OK) || (esp_core_dump_image_get(&addr, &size) != ESP_OK)) {
+        return common::Status::ERR_NOT_FOUND;
+    }
+    out.size = static_cast<uint32_t>(size);
+    // Bản tóm tắt cần heap (~vài KB) cho bộ giải nén ELF: cấp ở PSRAM qua malloc mặc định.
+    auto* const p_summary = static_cast<esp_core_dump_summary_t*>(
+        heap_caps_calloc(1U, sizeof(esp_core_dump_summary_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (p_summary == nullptr) {
+        return common::Status::ERR_NO_MEM;
+    }
+    if (esp_core_dump_get_summary(p_summary) == ESP_OK) {
+        copy_text(out.task, sizeof(out.task), p_summary->exc_task);
+        out.pc = p_summary->exc_pc;
+#if CONFIG_IDF_TARGET_ARCH_RISCV
+        out.return_address = p_summary->ex_info.ra;
+        out.cause = p_summary->ex_info.mcause;
+        out.fault_address = p_summary->ex_info.mtval;
+#endif
+        (void)std::snprintf(out.elf_sha, sizeof(out.elf_sha), "%.16s",
+                            reinterpret_cast<const char*>(p_summary->app_elf_sha256));
+    }
+    heap_caps_free(p_summary);
+    // Ghi chú panic chỉ có với abort()/assert; lỗi CPU thì dựng lý do từ mcause.
+    if (esp_core_dump_get_panic_reason(out.reason, sizeof(out.reason)) != ESP_OK) {
+        copy_text(out.reason, sizeof(out.reason), exception_name(out.cause));
+    }
+    return common::Status::OK;
+}
+
+common::Status Esp32System::crash_read(size_t offset, uint8_t* p_buf, size_t len, size_t& got) const
+{
+    got = 0U;
+    size_t addr = 0U;
+    size_t size = 0U;
+    if ((p_buf == nullptr) || (esp_core_dump_image_get(&addr, &size) != ESP_OK)) {
+        return common::Status::ERR_NOT_FOUND;
+    }
+    if (offset >= size) {
+        return common::Status::OK; // Hết.
+    }
+    const size_t count = ((size - offset) < len) ? (size - offset) : len;
+    if (esp_flash_read(nullptr, p_buf, static_cast<uint32_t>(addr + offset), static_cast<uint32_t>(count)) != ESP_OK) {
+        return common::Status::ERR_IO;
+    }
+    got = count;
+    return common::Status::OK;
+}
+
+common::Status Esp32System::crash_erase()
+{
+    return (esp_core_dump_image_erase() == ESP_OK) ? common::Status::OK : common::Status::ERR_IO;
+}
+#else
+common::Status Esp32System::crash_summary(hal::CrashSummary& out) const
+{
+    (void)out;
+    return common::Status::ERR_NOT_SUPPORTED;
+}
+
+common::Status Esp32System::crash_read(size_t offset, uint8_t* p_buf, size_t len, size_t& got) const
+{
+    (void)offset;
+    (void)p_buf;
+    (void)len;
+    got = 0U;
+    return common::Status::ERR_NOT_SUPPORTED;
+}
+
+common::Status Esp32System::crash_erase()
+{
+    return common::Status::ERR_NOT_SUPPORTED;
+}
+#endif
+
+common::Status Esp32System::get_watchdog_info(hal::WatchdogInfo& info) const
+{
+    info = hal::WatchdogInfo{};
+#if CONFIG_ESP_TASK_WDT_EN
+    info.task_enabled = true;
+    info.task_timeout_ms = static_cast<uint32_t>(CONFIG_ESP_TASK_WDT_TIMEOUT_S) * 1000U;
+#if CONFIG_ESP_TASK_WDT_PANIC
+    info.task_panics = true;
+#endif
+#if CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU0
+    info.task_idle_core[0] = true;
+#endif
+#if CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1
+    info.task_idle_core[1] = true;
+#endif
+#endif
+#if CONFIG_ESP_INT_WDT
+    info.interrupt_enabled = true;
+    info.interrupt_timeout_ms = static_cast<uint32_t>(CONFIG_ESP_INT_WDT_TIMEOUT_MS);
+#endif
+    return common::Status::OK;
+}
 
 } // namespace esp32_mcal

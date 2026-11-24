@@ -78,3 +78,9 @@ CONFIG_HEAP_TRACING_STANDALONE=y
 #   CONFIG_HEAP_TRACING_STACK_DEPTH=4
 #   CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y   (frame pointer làm bootloader vượt 0x6000 byte trước bảng phân vùng)
 # Đã đo: -14,6 KB RAM nội, vẽ lại chậm ~8 % -> chỉ bật khi dò rò rỉ.
+
+# ---- Chẩn đoán: core dump vào flash khi panic (`gach crash info | dump | clear`) ----
+# Phân vùng `coredump` 128 KB ở cuối bảng phân vùng (sau factory): NVS và app không dịch chuyển.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_ESP_COREDUMP_CHECKSUM_SHA256=y

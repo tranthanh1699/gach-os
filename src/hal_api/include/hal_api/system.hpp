@@ -136,6 +136,28 @@ struct HeapTraceRecord {
     uintptr_t callers[HEAP_TRACE_DEPTH]; /**< Địa chỉ nơi gọi (0 = không có). */
 };
 
+/** @brief Tóm tắt core dump của lần crash gần nhất (lưu trong flash, sống qua khởi động lại). */
+struct CrashSummary {
+    char task[TASK_NAME_LEN];   /**< Task gây lỗi. */
+    char reason[64];            /**< Lý do panic (VD "Load access fault"), "" nếu không rõ. */
+    uintptr_t pc;               /**< Địa chỉ lệnh gây lỗi. */
+    uintptr_t return_address;   /**< Nơi gọi (RISC-V: thanh ghi ra), 0 nếu không có. */
+    uint32_t cause;             /**< Mã nguyên nhân của CPU (RISC-V mcause). */
+    uint32_t fault_address;     /**< Địa chỉ truy cập lỗi (RISC-V mtval). */
+    uint32_t size;              /**< Kích thước core dump (byte). */
+    char elf_sha[17];           /**< 16 ký tự đầu SHA256 của firmware đã crash (đối chiếu với file .elf). */
+};
+
+/** @brief Cấu hình watchdog. */
+struct WatchdogInfo {
+    bool task_enabled;
+    uint32_t task_timeout_ms;
+    bool task_panics;           /**< Hết hạn -> panic (reset) thay vì chỉ in cảnh báo. */
+    bool task_idle_core[SYSTEM_MAX_CORES]; /**< Theo dõi task idle của core (phát hiện core bị chiếm). */
+    bool interrupt_enabled;
+    uint32_t interrupt_timeout_ms;
+};
+
 /** @brief Dịch vụ hệ thống do platform cung cấp. */
 class ISystem {
 public:
@@ -259,6 +281,35 @@ public:
     {
         (void)index;
         (void)record;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+
+    // ---- Chẩn đoán lỗi ----
+
+    /** @return ERR_NOT_FOUND nếu không có core dump, ERR_NOT_SUPPORTED nếu platform không lưu core dump. */
+    virtual common::Status crash_summary(CrashSummary& summary) const
+    {
+        (void)summary;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+
+    /** @brief Đọc core dump thô (để tải về phân tích). @param[out] got Số byte đọc được (0 = hết). */
+    virtual common::Status crash_read(size_t offset, uint8_t* p_buf, size_t len, size_t& got) const
+    {
+        (void)offset;
+        (void)p_buf;
+        (void)len;
+        got = 0U;
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+
+    /** @brief Xóa core dump đã lưu. */
+    virtual common::Status crash_erase() { return common::Status::ERR_NOT_SUPPORTED; }
+
+    /** @param[out] info Cấu hình watchdog. */
+    virtual common::Status get_watchdog_info(WatchdogInfo& info) const
+    {
+        (void)info;
         return common::Status::ERR_NOT_SUPPORTED;
     }
 

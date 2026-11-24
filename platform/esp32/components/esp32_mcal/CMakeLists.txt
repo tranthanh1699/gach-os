@@ -21,6 +21,6 @@ idf_component_register(SRCS "src/esp32_clock.cpp"
                                 esp_driver_sdmmc esp_driver_uart esp_event nvs_flash sdmmc
                        PRIV_REQUIRES spi_flash ${ESP32_MCAL_WIFI_REQUIRES} esp_netif lwip fatfs esp_hw_support esp_driver_tsens
                                 app_update bootloader_support esp_partition esp_http_client mbedtls
-                                esp_app_format esp_psram heap)
+                                esp_app_format esp_psram heap espcoredump)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE ${OS_STRICT_FLAGS})
