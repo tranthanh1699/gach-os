@@ -17,6 +17,7 @@
 #include "common/event.hpp"
 #include "common/string_utils.hpp"
 #include "hal_api/board.hpp"
+#include "manifest.hpp"
 #include "runtime/runtime.hpp"
 #include "runtime/sdk_version.hpp"
 
@@ -30,7 +31,12 @@ constexpr const char* INDEX_HEADER = "#gach-store\t1";
 constexpr const char* INSTALL_DIR = "install";
 constexpr const char* PART_SUFFIX = ".part";
 constexpr size_t INDEX_BUF_LEN = 16U * 1024U;
-constexpr size_t FIELD_COUNT = 9U;
+constexpr size_t FIELD_COUNT = 12U;     /**< Số cột tối đa của một dòng index.tsv. */
+constexpr size_t FIELD_COUNT_MIN = 9U;  /**< Danh mục cũ (chưa có mô tả / thể loại / ảnh chụp). */
+constexpr const char* CACHE_DIR = "store_cache";
+constexpr size_t GIMG_HEADER_LEN = 16U;
+constexpr uint8_t GIMG_RGB565A8 = 1U;
+constexpr uint8_t MAX_SHOTS = 3U;
 constexpr size_t MESSAGE_LEN = 96U;
 constexpr size_t PATH_LEN = 128U;
 constexpr int32_t HTTP_OK = 200;
@@ -47,7 +53,7 @@ StoreState s_state = StoreState::IDLE;
 size_t s_installing = 0U;
 char s_message[MESSAGE_LEN] = {};
 char s_index[INDEX_BUF_LEN + 1U]; // Bản sao danh mục để tách trường tại chỗ.
-char s_part_path[PATH_LEN] = {};
+char s_part_path[PATH_LEN + sizeof(".part")] = {}; // Đường dẫn đích + đuôi ".part".
 char s_final_path[PATH_LEN] = {};
 
 void set_message(const char* p_fmt, const char* p_arg = "") __attribute__((format(printf, 1, 0)));
@@ -88,7 +94,8 @@ size_t split_tabs(char* p_line, char* p_fields[FIELD_COUNT])
 bool parse_line(char* p_line, StoreApp& out)
 {
     char* fields[FIELD_COUNT] = {};
-    if (split_tabs(p_line, fields) != FIELD_COUNT) {
+    const size_t count = split_tabs(p_line, fields);
+    if (count < FIELD_COUNT_MIN) {
         return false;
     }
     out = StoreApp{};
@@ -101,6 +108,12 @@ bool parse_line(char* p_line, StoreApp& out)
     (void)common::copy_string(out.file, sizeof(out.file), fields[6]);
     (void)common::copy_string(out.icon, sizeof(out.icon), fields[7]);
     out.color = (fields[8][0] == '#') ? static_cast<uint32_t>(std::strtoul(&fields[8][1], nullptr, HEX_BASE)) : 0U;
+    if (count == FIELD_COUNT) {
+        (void)common::copy_string(out.description, sizeof(out.description), fields[9]);
+        (void)common::copy_string(out.category, sizeof(out.category), fields[10]);
+        const unsigned long shots = std::strtoul(fields[11], nullptr, 10);
+        out.shots = static_cast<uint8_t>((shots > MAX_SHOTS) ? MAX_SHOTS : shots);
+    }
     return (out.id[0] != '\0') && (std::strlen(out.sha256) == SHA_HEX_LEN) && is_safe_file(out.file);
 }
 
@@ -252,7 +265,8 @@ common::Status store_install(size_t index)
 
 StoreState store_poll()
 {
-    const bool is_busy = (s_state == StoreState::LOADING_INDEX) || (s_state == StoreState::DOWNLOADING);
+    const bool is_busy = (s_state == StoreState::LOADING_INDEX) || (s_state == StoreState::DOWNLOADING) ||
+                         (s_state == StoreState::FETCHING_SHOT);
     if (!is_busy || (s_p_http->state() != hal::HttpState::DONE)) {
         return s_state;
     }
@@ -269,6 +283,13 @@ StoreState store_poll()
         } else {
             parse_index(s_p_http->body(), result.body_len);
         }
+    } else if (s_state == StoreState::FETCHING_SHOT) {
+        const bool ok = common::is_ok(result.status) && (result.http_code == HTTP_OK) &&
+                        common::is_ok(s_p_fs->rename(s_part_path, s_final_path));
+        if (!ok) {
+            (void)s_p_fs->remove(s_part_path);
+        }
+        s_state = ok ? StoreState::DONE : StoreState::FAILED; // Ảnh lỗi: không ghi đè thông báo của kho.
     } else {
         finish_install(result);
     }
@@ -299,6 +320,83 @@ const StoreApp& store_app(size_t index)
 const char* store_message()
 {
     return s_message;
+}
+
+namespace {
+
+bool shot_path(size_t index, uint8_t n, char* p_out, size_t len)
+{
+    if ((index >= s_count) || (n == 0U) || (n > s_apps[index].shots)) {
+        return false;
+    }
+    const StoreApp& app = s_apps[index];
+    const int written = std::snprintf(p_out, len, "%s/%s-%s-%u.gimg", CACHE_DIR, app.id, app.version,
+                                      static_cast<unsigned>(n));
+    return (written > 0) && (static_cast<size_t>(written) < len);
+}
+
+uint16_t read_u16(const uint8_t* p_bytes)
+{
+    return static_cast<uint16_t>(p_bytes[0] | (static_cast<uint16_t>(p_bytes[1]) << 8U));
+}
+
+} // namespace
+
+const char* app_icon_symbol(const char* p_name)
+{
+    return icon_symbol((p_name != nullptr) ? p_name : "");
+}
+
+bool store_shot_cached(size_t index, uint8_t n)
+{
+    char path[PATH_LEN];
+    bool is_dir = false;
+    return (s_p_fs != nullptr) && shot_path(index, n, path, sizeof(path)) && s_p_fs->exists(path, is_dir) && !is_dir;
+}
+
+common::Status store_fetch_shot(size_t index, uint8_t n)
+{
+    if ((s_p_http == nullptr) || (s_p_fs == nullptr) || !s_p_fs->is_mounted() ||
+        !shot_path(index, n, s_final_path, sizeof(s_final_path))) {
+        return common::Status::ERR_PARAM;
+    }
+    if ((s_state == StoreState::LOADING_INDEX) || (s_state == StoreState::DOWNLOADING) ||
+        (s_state == StoreState::FETCHING_SHOT)) {
+        return common::Status::ERR_STATE;
+    }
+    (void)s_p_fs->make_dir(CACHE_DIR);
+    (void)std::snprintf(s_part_path, sizeof(s_part_path), "%s%s", s_final_path, PART_SUFFIX);
+    char url[STORE_URL_LEN + PATH_LEN];
+    (void)std::snprintf(url, sizeof(url), "%sshots/%s-%u.gimg", store_url(), s_apps[index].id, static_cast<unsigned>(n));
+    const common::Status status = s_p_http->start_download(url, *s_p_fs, s_part_path);
+    if (common::is_ok(status)) {
+        s_state = StoreState::FETCHING_SHOT;
+    }
+    return status;
+}
+
+bool store_read_shot(size_t index, uint8_t n, uint8_t* p_buf, size_t cap, StoreImage& out)
+{
+    char path[PATH_LEN];
+    hal::FileHandle handle = hal::INVALID_FILE;
+    if ((p_buf == nullptr) || (cap < GIMG_HEADER_LEN) || !shot_path(index, n, path, sizeof(path)) ||
+        !common::is_ok(s_p_fs->open(path, hal::OpenMode::READ, handle))) {
+        return false;
+    }
+    size_t got = 0U;
+    const bool ok = common::is_ok(s_p_fs->read(handle, p_buf, cap, got));
+    s_p_fs->close(handle);
+    if (!ok || (got < GIMG_HEADER_LEN) || (std::memcmp(p_buf, "GIMG", 4U) != 0)) {
+        return false;
+    }
+    out.width = read_u16(&p_buf[8]);
+    out.height = read_u16(&p_buf[10]);
+    out.stride = read_u16(&p_buf[12]);
+    out.has_alpha = (p_buf[5] == GIMG_RGB565A8);
+    out.data_size = static_cast<uint32_t>(out.height) * out.stride +
+                    (out.has_alpha ? (static_cast<uint32_t>(out.width) * out.height) : 0U);
+    out.p_data = &p_buf[GIMG_HEADER_LEN];
+    return (got == (GIMG_HEADER_LEN + out.data_size)) && (out.width > 0U) && (out.height > 0U);
 }
 
 } // namespace runtime

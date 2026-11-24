@@ -118,9 +118,22 @@ struct StoreApp {
     char file[64];   /**< Tên gói trên máy chủ (cùng thư mục với index.tsv). */
     char icon[16];
     char sha256[65]; /**< Hex thường. */
+    char description[200];
+    char category[16];
     uint32_t size;
     uint32_t color;  /**< 0xRRGGBB. */
     uint8_t sdk;
+    uint8_t shots;   /**< Số ảnh chụp trên máy chủ (shots/<id>-<1..n>.gimg). */
+};
+
+/** @brief Ảnh chụp đã đọc vào bộ đệm của người gọi (định dạng RGB565 / RGB565A8, khớp lv_image_dsc_t). */
+struct StoreImage {
+    const uint8_t* p_data;
+    uint32_t data_size;
+    uint16_t width;
+    uint16_t height;
+    uint16_t stride;
+    bool has_alpha;
 };
 
 /** @brief Trạng thái việc đang chạy của kho. */
@@ -128,6 +141,7 @@ enum class StoreState : uint8_t {
     IDLE,          /**< Không có việc. */
     LOADING_INDEX, /**< Đang tải danh mục. */
     DOWNLOADING,   /**< Đang tải gói. */
+    FETCHING_SHOT, /**< Đang tải ảnh chụp (trang chi tiết). */
     DONE,          /**< Việc vừa xong thành công (store_message: kết quả). */
     FAILED         /**< Việc vừa lỗi (store_message: lý do). */
 };
@@ -158,6 +172,18 @@ const StoreApp& store_app(size_t index);
 
 /** @return Thông báo của việc gần nhất (lỗi hoặc kết quả), "" nếu không có. */
 const char* store_message();
+
+/** @return true nếu ảnh chụp thứ n (1..shots) của app đã có trong bộ nhớ đệm trên thẻ. */
+bool store_shot_cached(size_t index, uint8_t n);
+
+/** @brief Bắt đầu tải ảnh chụp thứ n của app vào bộ nhớ đệm trên thẻ (store_poll báo xong). */
+common::Status store_fetch_shot(size_t index, uint8_t n);
+
+/** @brief Đọc ảnh chụp đã đệm vào p_buf (cap byte). @return false nếu chưa có / hỏng / không đủ chỗ. */
+bool store_read_shot(size_t index, uint8_t n, uint8_t* p_buf, size_t cap, StoreImage& out);
+
+/** @return Ký hiệu LVGL của tên icon trong manifest (VD "play"); mặc định biểu tượng file. */
+const char* app_icon_symbol(const char* p_name);
 
 /** @brief Gỡ cài đặt (app phải đang không mở). */
 common::Status uninstall(const char* p_id);
