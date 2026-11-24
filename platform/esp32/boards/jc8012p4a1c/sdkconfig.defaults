@@ -70,3 +70,11 @@ CONFIG_SPIRAM_ALLOW_BSS_SEG_EXTERNAL_MEMORY=y
 
 # ---- Phân core: UI (LVGL + Lua) ghim core 1; mạng (lwip, HTTP/TLS), debug bridge, esp_timer ở core 0 ----
 CONFIG_LWIP_TCPIP_TASK_AFFINITY_CPU0=y
+
+# ---- gach shell: heap trace (`gach heap trace ...`, tìm rò rỉ) ----
+CONFIG_HEAP_TRACING_STANDALONE=y
+# Muốn trace ghi được NƠI GỌI malloc (RISC-V cần frame pointer), thêm 3 dòng dưới rồi fullclean + build:
+#   CONFIG_ESP_SYSTEM_USE_FRAME_POINTER=y
+#   CONFIG_HEAP_TRACING_STACK_DEPTH=4
+#   CONFIG_BOOTLOADER_LOG_LEVEL_WARN=y   (frame pointer làm bootloader vượt 0x6000 byte trước bảng phân vùng)
+# Đã đo: -14,6 KB RAM nội, vẽ lại chậm ~8 % -> chỉ bật khi dò rò rỉ.

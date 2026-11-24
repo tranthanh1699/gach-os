@@ -24,6 +24,16 @@ public:
     common::Status get_cpu_stats(hal::CpuStats& stats) override;
     common::Status get_firmware_stats(hal::FirmwareStats& stats) const override;
     common::Status read_temperature(float& celsius) override;
+    common::Status get_chip_details(hal::ChipDetails& details) const override;
+    common::Status get_firmware_info(hal::FirmwareInfo& info) const override;
+    common::Status get_boot_info(hal::BootInfo& info) const override;
+    common::Status get_tasks(hal::TaskInfo* p_out, size_t max, size_t& count, uint64_t& total_runtime) const override;
+    common::Status get_heap_regions(hal::HeapRegion* p_out, size_t max, size_t& count) const override;
+    common::Status get_partitions(hal::FlashPartition* p_out, size_t max, size_t& count) const override;
+    common::Status heap_trace_start(size_t max_records) override;
+    common::Status heap_trace_stop() override;
+    common::Status heap_trace_status(size_t& count, size_t& bytes, bool& is_running) const override;
+    common::Status heap_trace_get(size_t index, hal::HeapTraceRecord& record) const override;
 
 private:
     /** @brief Lấy mẫu bộ đếm idle mỗi core và tính tải (gọi trong vùng khóa). */
@@ -35,6 +45,9 @@ private:
     uint8_t m_load_pct[hal::SYSTEM_MAX_CORES];       /**< Kết quả gần nhất. */
     void* m_p_tsens;                                 /**< temperature_sensor_handle_t, tạo khi đọc lần đầu. */
     bool m_tsens_failed;                             /**< Cài cảm biến lỗi -> không thử lại mỗi lần đọc. */
+    void* m_p_trace_buf;                             /**< Bộ đệm bản ghi heap trace (PSRAM), cấp khi dùng lần đầu. */
+    size_t m_trace_capacity;
+    bool m_trace_running;
 };
 
 } // namespace esp32_mcal
