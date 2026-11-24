@@ -5,7 +5,7 @@ local app = {}
 
 local C = { bg = 0x000000, card = 0x1C1C1E, text = 0xFFFFFF, dim = 0x8E8E93, accent = 0x0A84FF,
             green = 0x30D158, orange = 0xFF9F0A, purple = 0xBF5AF2, pink = 0xFF375F }
-local PAGES = { "Buttons", "Inputs", "Feedback", "Motion" }
+local PAGES = { "Buttons", "Inputs", "Feedback", "Motion", "Images" }
 
 local w = {}
 local timers = {}
@@ -189,7 +189,51 @@ local function page_motion(body)
   end)
 end
 
-local BUILDERS = { page_buttons, page_inputs, page_feedback, page_motion }
+-- ===================== Trang: Images (SDK v8) =====================
+local function page_images(body)
+  local c = card(body, "IMAGE  (ui.image: PNG in the package, alpha, fit, opa)")
+  local r = row(c, 16)
+  local iw, ih = ui.image_info("img/orb.png")
+  ui.image(r, "img/orb.png")
+  ui.image(r, "img/badge.png", { w = 64, h = 64 })
+  ui.image(r, "img/badge.png", { w = 160, h = 64, fit = "contain" })
+  ui.image(r, "img/orb.png", { opa = 40 })
+  label(c, string.format("orb.png: %dx%d dp", iw, ih), C.dim)
+
+  local c2 = card(body, "SWAP  (ui.set_image)")
+  local r2 = row(c2, 16)
+  local pic = ui.image(r2, "img/orb.png")
+  local is_orb = true
+  ui.button(r2, { text = "Swap", icon = S.SHUFFLE }, function()
+    is_orb = not is_orb
+    ui.set_image(pic, is_orb and "img/orb.png" or "img/badge.png")
+    log("swap " .. (is_orb and "orb" or "badge"))
+  end)
+
+  local c3 = card(body, "CANVAS  (ui.canvas + ui.draw: fill, rect, line, circle, image, text)")
+  local cv = ui.canvas(c3, 600, 180)
+  local function paint(seed)
+    local cmds = { { "fill", 0x101014 } }
+    for i = 0, 11 do -- Cột biểu đồ.
+      local h = 20 + ((i * 37 + seed * 53) % 120)
+      cmds[#cmds + 1] = { "rect", 20 + i * 30, 160 - h, 20, h, 0x0A84FF, 4 }
+    end
+    cmds[#cmds + 1] = { "line", 20, 160, 380, 160, 0x8E8E93, 2 }
+    cmds[#cmds + 1] = { "circle", 470, 90, 50 + (seed % 3) * 10, 0xBF5AF2 }
+    cmds[#cmds + 1] = { "image", "img/badge.png", 500, 20 }
+    cmds[#cmds + 1] = { "text", 400, 150, "seed " .. seed, 0xFFFFFF, "medium" }
+    ui.draw(cv, cmds)
+  end
+  local seed = 1
+  paint(seed)
+  ui.button(c3, { text = "Redraw", icon = S.REFRESH or S.LOOP }, function()
+    seed = seed + 1
+    paint(seed)
+    log("canvas redraw " .. seed)
+  end)
+end
+
+local BUILDERS = { page_buttons, page_inputs, page_feedback, page_motion, page_images }
 
 local function show_page(i)
   w.page = i
@@ -203,10 +247,10 @@ end
 function app.on_create(root)
   ui.style(root, { bg = C.bg, pad = 14, gap = 12 })
 
-  local header = row(root, 14)
-  ui.style(header, { width = "100%", justify = "between" })
-  label(header, "UI Kit", C.text, "large")
-  local tabs = ui.segmented(header, PAGES, 1)
+  -- Tiêu đề và thanh tab trên hai hàng: 5 tab chung hàng với tiêu đề tràn khỏi màn hình hẹp.
+  label(root, "UI Kit", C.text, "large")
+  local tabs = ui.segmented(root, PAGES, 1)
+  ui.style(tabs, { width = "100%" })
   ui.on(tabs, "change", show_page)
 
   w.body = ui.column(root)
