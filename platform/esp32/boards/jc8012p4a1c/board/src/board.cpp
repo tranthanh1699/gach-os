@@ -123,6 +123,13 @@ const Devices& board_init()
     } else {
         ESP_LOGW(TAG, "App arena (%u B) unavailable", static_cast<unsigned>(APP_ARENA_BYTES));
     }
+    void* const p_assets = heap_caps_aligned_alloc(ASSET_ARENA_ALIGN, ASSET_ARENA_BYTES,
+                                                   MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (p_assets != nullptr) {
+        s_devices.asset_arena = hal::MemoryRegion{p_assets, ASSET_ARENA_BYTES};
+    } else {
+        ESP_LOGW(TAG, "Asset arena (%u B) unavailable", static_cast<unsigned>(ASSET_ARENA_BYTES));
+    }
 
     // NVS trước Wi-Fi: Wi-Fi (esp_wifi_remote -> ESP32-C6) cần NVS.
     const bool storage_ok = optional(s_storage.init(NVS_NAMESPACE), "NVS storage");

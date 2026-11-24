@@ -49,6 +49,11 @@ struct Devices {
      */
     MemoryRegion draw_buffers[DRAW_BUFFER_COUNT];
     IHttpClient* p_http; /**< Tùy chọn: HTTP(S) cho app (cần mạng, VD Wi-Fi). */
+    /**
+     * Kho ảnh / bộ đệm đồ họa của app cài thêm đang chạy (ảnh .gimg, canvas, sprite sheet). Thu hồi toàn bộ khi app
+     * đóng. {nullptr,0} = không hỗ trợ ảnh (app vẫn chạy, ui.image báo lỗi).
+     */
+    MemoryRegion asset_arena;
 };
 
 /**

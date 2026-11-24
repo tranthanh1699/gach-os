@@ -26,6 +26,9 @@ CONFIG_CACHE_L2_CACHE_LINE_128B=y
 
 # ---- LVGL: màn lớn -> heap LVGL lớn hơn board 320x240 ----
 CONFIG_LV_MEM_SIZE=131072
+# Heap LVGL qua malloc hệ thống (CONFIG_LV_USE_CLIB_MALLOC, đối tượng nhỏ vào RAM nội, dư sang PSRAM) đã đo
+# (perf bench launcher, 2026-11-24): 43.9 ms so với 40.6 ms với pool 128 KiB -> CHẬM HƠN 8 %, lv_mem_monitor (gach
+# health) mất số liệu -> giữ pool tĩnh. App vẫn bị giới hạn bởi pool này (MAX_OBJECTS 1024 là trần bảng handle).
 # Nhịp refresh ~60 Hz (mặc định chung 20 ms = 50 Hz).
 CONFIG_LV_DEF_REFR_PERIOD=16
 # Vẽ song song (CONFIG_LV_OS_FREERTOS + CONFIG_LV_DRAW_SW_DRAW_UNIT_CNT=2) đã đo (perf bench, vẽ lại toàn màn):
@@ -84,3 +87,4 @@ CONFIG_HEAP_TRACING_STANDALONE=y
 CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y
 CONFIG_ESP_COREDUMP_CHECKSUM_SHA256=y
+

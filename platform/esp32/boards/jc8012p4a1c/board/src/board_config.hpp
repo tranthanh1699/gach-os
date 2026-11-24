@@ -81,6 +81,10 @@ constexpr bool DRAW_BUFFER_PREFER_INTERNAL = true; /**< RAM nội trước, PSRA
 // ---- Vùng RAM cho máy ảo app cài thêm (Lua): PSRAM dư dả ----
 constexpr size_t APP_ARENA_BYTES = 1024U * 1024U;
 
+// ---- Kho ảnh / đồ họa của app cài thêm (ảnh .gimg, canvas, sprite sheet): PSRAM ----
+constexpr size_t ASSET_ARENA_BYTES = 8U * 1024U * 1024U;
+constexpr size_t ASSET_ARENA_ALIGN = 64U; /**< Cache line PSRAM: ảnh đọc nhanh, không chia sẻ dòng cache. */
+
 /** @brief Bộ đệm phản hồi HTTP cho app (PSRAM): đủ cho JSON dự báo thời tiết vài ngày. */
 constexpr size_t HTTP_BODY_BYTES = 64U * 1024U;
 
