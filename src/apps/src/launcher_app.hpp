@@ -31,6 +31,7 @@ public:
     void on_create(lv_obj_t* p_root) override;
     void on_resume() override;
     void on_pause() override;
+    bool on_back() override;
 
 private:
     void build_pages();
@@ -41,6 +42,24 @@ private:
     void refresh_if_changed();
     void create_tile(lv_obj_t* p_parent, fw::App& target, size_t slot);
 
+    // ---- Chế độ sửa (giữ lâu icon): rung, xóa (×), kéo thả sắp xếp ----
+    void enter_edit();
+    void exit_edit();
+    void decorate(lv_obj_t* p_tile, fw::App& target);
+    void apply_saved_order();
+    void save_order();
+    void begin_drag(lv_obj_t* p_tile);
+    void finish_drag();
+    void ask_delete(fw::App& target);
+    void close_dialog();
+
+    static void on_tile_event(lv_event_t* p_event);
+    static void on_badge_clicked(lv_event_t* p_event);
+    static void on_done_clicked(lv_event_t* p_event);
+    static void on_page_clicked(lv_event_t* p_event);
+    static void on_delete_confirm(lv_event_t* p_event);
+    static void on_dialog_cancel(lv_event_t* p_event);
+    static void rebuild_active(void* p_arg);
     static void on_tile_clicked(lv_event_t* p_event);
     static void on_page_changed(lv_event_t* p_event);
     static void on_scroll_begin(lv_event_t* p_event);
@@ -62,6 +81,14 @@ private:
     lv_timer_t* m_p_timer;
     uint32_t m_built_generation;
     bool m_is_paused;
+    bool m_is_editing;
+    lv_obj_t* m_p_done;         /**< Nút "Done" (chỉ hiện khi đang sửa). */
+    lv_obj_t* m_p_drag;         /**< Icon đang kéo (NULL = không kéo). */
+    lv_obj_t* m_p_dialog;
+    lv_point_t m_press_point;   /**< Điểm nhấn (màn hình) của icon đang giữ. */
+    lv_point_t m_drag_offset;   /**< Ngón tay so với góc icon khi bắt đầu kéo. */
+    size_t m_drag_from;         /**< Vị trí (trong m_visible) của icon đang kéo. */
+    fw::App* m_p_delete;        /**< App chờ xác nhận xóa. */
 };
 
 } // namespace apps
