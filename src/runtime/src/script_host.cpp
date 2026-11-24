@@ -72,6 +72,7 @@ void* arena_alloc(void* p_ud, void* p_ptr, size_t old_size, size_t new_size)
 }
 
 constexpr uint8_t SDK_SCALED_UI = 3U; /**< Từ SDK v3: kích thước app tính theo dp, font co giãn. */
+constexpr uint8_t SDK_GRAPHICS = 8U;  /**< Từ SDK v8: ảnh, canvas, gach.game. */
 
 // ---- SDK v4: widget hiển thị số liệu ----
 constexpr uint32_t GAUGE_TRACK_COLOR = 0x2C2C2EU;  /**< Nền rãnh bar/arc, lưới chart. */
@@ -1403,6 +1404,9 @@ struct ScriptHost::Sdk {
         add_table(p_lua, "ui", UI);
         (void)lua_getfield(p_lua, -1, "ui");
         register_ui_v6(p_lua);
+        if (host_of(p_lua)->m_manifest.sdk >= SDK_GRAPHICS) {
+            register_ui_v8(p_lua);
+        }
         push_symbols(p_lua);
         lua_setfield(p_lua, -2, "SYMBOL");
         lua_pop(p_lua, 1);
@@ -1410,6 +1414,10 @@ struct ScriptHost::Sdk {
         add_table(p_lua, "sys", SYS);
         add_table(p_lua, "storage", STORAGE);
         add_table(p_lua, "app", APP);
+        if (host_of(p_lua)->m_manifest.sdk >= SDK_GRAPHICS) {
+            register_game(p_lua);
+            lua_setfield(p_lua, -2, "game");
+        }
         add_table(p_lua, "net", NET);
         add_table(p_lua, "json", JSON);
         add_table(p_lua, "log", LOG);
@@ -1474,7 +1482,7 @@ const lv_font_t* ScriptHost::font_named(lua_State* p_lua, const char* p_size)
 // ScriptHost
 // ============================================================================
 ScriptHost::ScriptHost()
-    : m_p_fs(nullptr), m_arena{nullptr, 0U}, m_p_lua(nullptr), m_p_apps(nullptr), m_p_services(nullptr),
+    : m_p_fs(nullptr), m_arena{nullptr, 0U}, m_asset_region{nullptr, 0U}, m_p_lua(nullptr), m_p_apps(nullptr), m_p_services(nullptr),
       m_p_root(nullptr), m_manifest{}, m_objects{}, m_refs{}, m_timers{}, m_widget_kind{}, m_anim_refs{},
       m_bindings{}, m_p_keyboard(nullptr), m_p_alert(nullptr), m_alert_ref(LUA_NOREF), m_p_toast(nullptr), m_p_http(nullptr), m_p_net_timer(nullptr),
       m_net_ref(LUA_NOREF), m_app_ref(LUA_NOREF),
@@ -1483,10 +1491,12 @@ ScriptHost::ScriptHost()
 {
 }
 
-void ScriptHost::bind(hal::IFileSystem* p_fs, const hal::MemoryRegion& arena, hal::IHttpClient* p_http)
+void ScriptHost::bind(hal::IFileSystem* p_fs, const hal::MemoryRegion& arena, const hal::MemoryRegion& assets,
+                      hal::IHttpClient* p_http)
 {
     m_p_fs = p_fs;
     m_arena = arena;
+    m_asset_region = assets;
     m_p_http = p_http;
 }
 
@@ -1525,6 +1535,7 @@ common::Status ScriptHost::start(const Manifest& manifest, lv_obj_t* p_root, fw:
     }
 
     m_allocator.reset(m_arena.p_base, m_arena.size);
+    m_assets.reset(m_asset_region);
     m_p_lua = lua_newstate(&arena_alloc, &m_allocator);
     if (m_p_lua == nullptr) {
         fault("out of memory (arena too small)");
@@ -1738,6 +1749,7 @@ void ScriptHost::close_vm()
         }
         slot = TimerSlot{nullptr, LUA_NOREF};
     }
+    reset_game(); // Scene trước: timer của nó gọi vào VM.
     // Bỏ liên kết handle trước khi đóng VM: sự kiện DELETE đến sau sẽ không chạm vào VM đã đóng.
     for (size_t index = 0U; index < MAX_OBJECTS; ++index) {
         m_objects[index] = nullptr;
@@ -1749,6 +1761,7 @@ void ScriptHost::close_vm()
     }
     m_app_ref = LUA_NOREF;
     m_allocator.reset(m_arena.p_base, m_arena.size);
+    m_assets.reset(m_asset_region);
 }
 
 void ScriptHost::show_error()
@@ -1769,6 +1782,7 @@ void ScriptHost::show_error()
 
 void ScriptHost::set_timers_paused(bool paused)
 {
+    m_scene.set_suspended(paused);
     for (const TimerSlot& slot : m_timers) {
         if (slot.p_timer != nullptr) {
             if (paused) {

@@ -18,6 +18,8 @@
 #include <cstdint>
 
 #include "arena_allocator.hpp"
+#include "asset_cache.hpp"
+#include "game_scene.hpp"
 #include "common/non_copyable.hpp"
 #include "common/status.hpp"
 #include "framework/app_manager.hpp"
@@ -33,16 +35,20 @@ namespace runtime {
 /** @brief Máy ảo Lua dùng chung cho mọi app script. */
 class ScriptHost : private common::NonCopyable {
 public:
-    static constexpr size_t MAX_OBJECTS = 256U;   /**< Số widget tối đa một app tạo ra (bảng nằm trong PSRAM). */
-    static constexpr size_t MAX_BINDINGS = 256U;  /**< Số cặp (widget, sự kiện) gắn bằng gach.ui.on (SDK v6). */
-    static constexpr size_t MAX_TIMERS = 8U;      /**< Số timer đồng thời tối đa. */
+    static constexpr size_t MAX_OBJECTS = 1024U;  /**< Số widget tối đa một app tạo ra (bảng nằm trong PSRAM). */
+    static constexpr size_t MAX_BINDINGS = 1024U; /**< Số cặp (widget, sự kiện) gắn bằng gach.ui.on (SDK v6). */
+    static constexpr size_t MAX_TIMERS = 32U;     /**< Số timer đồng thời tối đa. */
     static constexpr uint32_t CALL_BUDGET_MS = 500U;
     static constexpr size_t ERROR_BUF_LEN = 160U;
 
     ScriptHost();
 
-    /** @brief Gắn filesystem, vùng nhớ và HTTP client (từ hal::Devices; p_http có thể NULL). */
-    void bind(hal::IFileSystem* p_fs, const hal::MemoryRegion& arena, hal::IHttpClient* p_http);
+    /**
+     * @brief Gắn filesystem, vùng nhớ máy ảo, kho ảnh và HTTP client (từ hal::Devices; p_http có thể NULL,
+     *        assets có thể rỗng = không hỗ trợ ảnh).
+     */
+    void bind(hal::IFileSystem* p_fs, const hal::MemoryRegion& arena, const hal::MemoryRegion& assets,
+              hal::IHttpClient* p_http);
 
     /** @return true nếu máy ảo đang chạy một app. */
     bool is_busy() const { return m_p_lua != nullptr; }
@@ -73,6 +79,8 @@ public:
 private:
     struct Sdk; // Bindings Lua (định nghĩa trong .cpp, truy cập thành viên private).
     friend struct UiV6; // Bindings SDK v6 (script_ui.cpp).
+    friend struct UiV8; // Bindings SDK v8: ảnh, canvas (script_image.cpp).
+    friend struct GameApi; // Bindings SDK v8: gach.game (script_game.cpp).
 
     /** @brief Một callback gach.ui.on: (widget, loại sự kiện) -> hàm Lua. handle = 0 là ô trống. */
     struct EventBinding {
@@ -91,6 +99,11 @@ private:
 
     // ---- SDK v6 (script_ui.cpp) ----
     static void register_ui_v6(lua_State* p_lua); /**< Thêm hàm v6 vào bảng gach.ui đang ở đỉnh stack. */
+    static void register_ui_v8(lua_State* p_lua); /**< Thêm hàm v8 (ảnh, canvas) vào bảng gach.ui ở đỉnh stack. */
+    static void register_game(lua_State* p_lua);  /**< Đẩy bảng gach.game mới lên stack. */
+    /** @brief Ảnh của app theo đường dẫn ở arg (lỗi Lua nếu không nạp được). */
+    static const lv_image_dsc_t* image_dsc_arg(lua_State* p_lua, int arg);
+    void reset_game(); /**< Hủy scene, bỏ mọi callback game (trước khi đóng VM). */
     static int ui_button_v6(lua_State* p_lua);     /**< gach.ui.button(parent, {opts}, fn). */
     static bool set_value_v6(lua_State* p_lua, lv_obj_t* p_obj, int arg); /**< set_value cho widget v6. */
     void release_object_extras(int32_t handle, lv_obj_t* p_obj);
@@ -131,6 +144,14 @@ private:
 
     hal::IFileSystem* m_p_fs;
     hal::MemoryRegion m_arena;
+    hal::MemoryRegion m_asset_region;
+    AssetCache m_assets; /**< Ảnh / canvas của app đang chạy (SDK v8). */
+    GameScene m_scene;   /**< gach.game của app đang chạy (SDK v8). */
+    int m_game_update_ref = LUA_NOREF;
+    int m_game_touch_ref = LUA_NOREF;
+    int m_game_overlap_refs[GameWorld::MAX_GROUPS][GameWorld::MAX_GROUPS] = {};
+    int m_game_anim_refs[GameWorld::MAX_SPRITES] = {};  /**< done của game.play theo ô sprite. */
+    int m_game_move_refs[GameWorld::MAX_SPRITES] = {};  /**< done của game.move_to theo ô sprite. */
     ArenaAllocator m_allocator;
     lua_State* m_p_lua;
     fw::AppManager* m_p_apps;

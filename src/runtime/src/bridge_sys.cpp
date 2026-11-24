@@ -407,6 +407,10 @@ void cmd_memmap(uint8_t id, const hal::Devices& dev)
         fmt_bytes(dev.app_arena.size, a, sizeof(a));
         line(id, "%-10s %10s  Lua VM arena @ %p", "app arena", a, dev.app_arena.p_base);
     }
+    if (dev.asset_arena.size > 0U) {
+        fmt_bytes(dev.asset_arena.size, a, sizeof(a));
+        line(id, "%-10s %10s  app images / canvas @ %p", "assets", a, dev.asset_arena.p_base);
+    }
     line(id, "-- flash partitions --");
     if (common::is_ok(dev.p_system->get_partitions(s_parts, MAX_PARTITIONS, count))) {
         for (size_t index = 0U; index < count; ++index) {
