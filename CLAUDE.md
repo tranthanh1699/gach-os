@@ -24,9 +24,9 @@ Debug bridge: [`docs/debug_bridge.md`](docs/debug_bridge.md).
 
 **Phát hành / cập nhật app Lua (kho trực tuyến trên GitHub Pages)** – chi tiết: [`appstore/README.md`](appstore/README.md):
 1. Sửa app trong `appstore/apps/<tên>`.
-2. **Tăng `version` trong `manifest.ini`** (board chỉ hiện *Update* khi version khác bản đã cài).
+2. **Tăng `version` trong `manifest.ini`** (board chỉ hiện *Update* khi version khác bản đã cài). App mới: thêm `category=`, `description=` và ảnh `store/1.png` (`tools/gach screenshot 3 appstore/apps/<tên>/store/1.png`).
 3. Commit (`feat(<tên app>): ...` / `fix(...)`) và push lên `main` → workflow `.github/workflows/appstore.yml` đóng gói và đăng `appstore/dist` lên `https://tranthanh1699.github.io/gach-os/` (~1–2 phút, CDN cache thêm tối đa 10 phút).
-4. Trên board: Apps → Store → làm mới (↻) → Update. Kiểm tra từ máy tính: `tools/gach store list` (cột STATE = `update` / `installed`), `tools/gach store install <id>`.
+4. Trên board: Gach Store → làm mới (↻) → tab Updates → UPDATE. Kiểm tra từ máy tính: `tools/gach store list` (cột STATE = `update` / `installed`), `tools/gach store install <id>`.
 - Không commit `appstore/dist/` (đã ignore; CI tự sinh). App dùng API SDK mới (`sdk=N` > SDK của firmware đang chạy) phải nạp firmware mới trước, không thì store báo *needs newer firmware*.
 - Thử kho trước khi push: `python3 -m http.server 8000 -d appstore/dist` + `tools/gach store url http://<ip-máy-tính>:8000` (trả về: `gach store url default`).
 - Môi trường AI có thể không có credential GitHub: nếu `git push` lỗi xác thực thì báo Kỹ sư V tự push, không cố cấu hình credential.

@@ -38,6 +38,14 @@ Cắm thẻ vào máy, rồi khởi động lại hoặc mở app **Apps** và n
 - Ảnh để dạng **PNG** trong thư mục app (SDK v8); `pack` tự đổi sang `.gimg` cho board. Công cụ phát triển (VD script
   sinh đồ họa) đặt trong thư mục `tools/` của app: không được đóng vào gói.
 
+## Trang app trong Gach Store
+
+| Trường / file | Ý nghĩa |
+| :--- | :--- |
+| `category=` trong `manifest.ini` | Thể loại hiển thị (Games, Utilities, Developer, Weather...) |
+| `description=` | Mô tả 1–2 câu (một dòng, không TAB) |
+| `store/1.png` .. `store/3.png` | Ảnh chụp trang chi tiết (không đóng vào gói; `pack` đổi sang `dist/shots/<id>-<n>.gimg`). Chụp ngay trên board: mở app rồi `tools/gach screenshot 3 appstore/apps/<tên>/store/1.png` (426x266) |
+
 ## Kho trực tuyến (GitHub Pages)
 
 `pack` sinh trong `dist/`: các gói `.gapp`, `index.tsv` (danh mục board đọc: id, tên, phiên bản, sdk, kích thước,
@@ -48,7 +56,7 @@ Máy chủ chỉ cần phục vụ tĩnh thư mục này.
 | :--- | :--- |
 | Bật kho (một lần) | Repo công khai → Settings → Pages → Build and deployment → Source: **GitHub Actions** |
 | Phát hành / cập nhật app | Tăng `version` trong `manifest.ini`, push lên `main`: workflow [`appstore.yml`](../.github/workflows/appstore.yml) đóng gói và đăng lên `https://tranthanh1699.github.io/gach-os/` |
-| Cài trên máy | App **Apps** → nút **Store** → chạm app (Install / Update). Hoặc `tools/gach store install <id>` |
+| Cài trên máy | App **Gach Store** → Discover / Updates → GET / UPDATE (chạm thẻ để xem chi tiết, ảnh chụp). Hoặc `tools/gach store install <id>` |
 | Thử kho trên máy tính (LAN) | `python3 -m http.server 8000 -d appstore/dist` rồi `tools/gach store url http://<ip-máy-tính>:8000` (về mặc định: `gach store url default`) |
 
 Máy tải `index.tsv`, tải gói thẳng vào thẻ SD (`install/<file>.part`), kiểm kích thước + SHA-256, rồi mới cài
