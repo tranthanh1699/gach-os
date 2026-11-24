@@ -166,7 +166,7 @@ common::Status AppManager::close(const char* p_id)
 
 bool AppManager::is_essential(const char* p_id) const
 {
-    static const char* const ESSENTIAL[] = {"settings", "apps"}; // Cần để bật lại / quản lý app.
+    static const char* const ESSENTIAL[] = {"settings", "store"}; // Cần để bật lại / quản lý app.
     if ((p_id == nullptr) || ((m_p_home != nullptr) && (std::strcmp(p_id, m_p_home->info().p_id) == 0))) {
         return true;
     }

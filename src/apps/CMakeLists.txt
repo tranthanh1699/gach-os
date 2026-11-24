@@ -1,5 +1,5 @@
 # L5 Applications: CHỈ phụ thuộc framework + runtime (API public) + LVGL. Không HAL, không driver, không SDK chip.
-idf_component_register(SRCS "src/app_store_app.cpp"
+idf_component_register(SRCS "src/gach_store_app.cpp"
                             "src/builtin_apps.cpp"
                             "src/files_app.cpp"
                             "src/launcher_app.cpp"
