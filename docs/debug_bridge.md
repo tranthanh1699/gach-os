@@ -28,6 +28,9 @@ tools/gach diagnose                             # health + crash + sổ lỗi + 
 tools/gach trace start; tools/gach trace export ui.json   # trace thời gian -> ui.perfetto.dev
 tools/gach crash dump                           # core dump lần crash gần nhất + backtrace
 tools/gach store list | store install <id>      # kho trực tuyến (GitHub Pages); store url <url|default> đổi kho
+tools/gach screenshot [scale] [file.png]        # chụp màn hình (scale 1-8, mặc định 4 = 320x200), ~16 s
+tools/gach input tap 720 80                      # chạm giả (pixel màn 1280x800); press x y [ms] giữ lâu
+tools/gach input swipe 900 400 300 400           # vuốt; drag x1 y1 x2 y2 [hold_ms] [ms] = giữ rồi kéo
 # trong gach shell: uidiag – trạng thái task UI không cần khóa (vòng lặp, phase, đứng bao lâu) khi nghi UI treo
 ```
 

@@ -21,6 +21,7 @@ tools/gach install appstore/dist/x.gapp       # cài app qua cáp USB (debug bri
 python3 -m unittest tools/test_gach.py
 ```
 Debug bridge: [`docs/debug_bridge.md`](docs/debug_bridge.md).
+**Tự kiểm UI trên board** (không cần Kỹ sư V chạm tay): `tools/gach screenshot 2 /tmp/x.png` (đọc ảnh để xem bố cục) + `tools/gach input tap|press|swipe|drag ...` (tọa độ pixel 1280x800, lấy từ ảnh chụp scale 2 nhân 2). Dùng sau mọi thay đổi giao diện trước khi báo xong.
 
 **Phát hành / cập nhật app Lua (kho trực tuyến trên GitHub Pages)** – chi tiết: [`appstore/README.md`](appstore/README.md):
 1. Sửa app trong `appstore/apps/<tên>`.

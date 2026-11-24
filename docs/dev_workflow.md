@@ -164,6 +164,8 @@ Trong shell, `install <file>`, `push <local> <remote>`, `pull <remote> [local]` 
 | `perf [reset\|bench]` | Hiệu năng vẽ: fps, thời gian khung, phần flush. `bench` = vẽ lại toàn màn 20 lần, in trung bình |
 | `log [n] [-l w]` / `log filter <text>` / `log tail` / `log export <file>` | Xem / lọc lịch sử log / chỉ log mới / lưu ra file |
 | `store list` / `store refresh` / `store install <id>` / `store url [url\|default]` | Kho trực tuyến: danh sách app (đã cài / có bản mới), tải + kiểm SHA-256 + cài, đổi địa chỉ kho (VD máy chủ LAN khi phát triển). Xem [appstore/README.md](../appstore/README.md) |
+| `screenshot [scale] [file.png]` | Chụp màn hình qua cáp ra PNG (scale 1–8, mặc định 4 → 320x200; 3 → 426x266 cho ảnh cửa hàng) |
+| `input tap x y` / `press x y [ms]` / `swipe x1 y1 x2 y2 [ms]` / `drag x1 y1 x2 y2 [hold_ms] [ms]` | Chạm giả kiểu `adb shell input` (tọa độ pixel màn hình): test tự động, kiểm UI không cần chạm tay |
 | `diagnose` | Một báo cáo: health + crash + sổ lỗi + lỗi trong log + sự kiện gần đây + gợi ý |
 | `event list [n]` / `event monitor` | Sự kiện hệ thống (mở app, Wi-Fi, cài app, lỗi script, reset bất thường) |
 | `trace start\|stop\|status` / `trace export <file.json>` | Trace thời gian (render, flush, chạm, mở app) → ui.perfetto.dev |
