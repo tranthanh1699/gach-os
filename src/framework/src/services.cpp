@@ -128,6 +128,22 @@ void Services::system_stats(SystemStats& stats) const
     }
 }
 
+common::Status Services::load_setting(const char* p_key, char* p_buf, size_t buf_len) const
+{
+    if ((m_p_devices == nullptr) || (m_p_devices->p_storage == nullptr)) {
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+    return m_p_devices->p_storage->get_string(p_key, p_buf, buf_len);
+}
+
+common::Status Services::save_setting(const char* p_key, const char* p_value)
+{
+    if ((m_p_devices == nullptr) || (m_p_devices->p_storage == nullptr)) {
+        return common::Status::ERR_NOT_SUPPORTED;
+    }
+    return m_p_devices->p_storage->set_string(p_key, p_value);
+}
+
 uint32_t Services::uptime_ms() const
 {
     return osal::tick_ms();

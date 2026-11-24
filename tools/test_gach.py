@@ -48,6 +48,13 @@ class CodecTest(unittest.TestCase):
         live = ["I (200) wifi: connected\n", "I (300) time: NTP sync started\n"]
         self.assertEqual(gach.merge_live(history, live), ["I (300) time: NTP sync started\n"])
 
+    def test_local_packages(self):
+        here = str(Path(__file__))
+        self.assertEqual(gach.local_packages(["install", here]), [here])
+        self.assertIsNone(gach.local_packages(["install", "install/x.gapp"]))  # chỉ có trên thẻ -> board xử lý
+        self.assertIsNone(gach.local_packages(["install"]))
+        self.assertIsNone(gach.local_packages(["list"]))
+
     def test_raw_log_is_not_a_frame(self):
         self.assertIsNone(gach.decode_frame(b"I (123) main: OS started\r\n"))
 

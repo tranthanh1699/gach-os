@@ -20,6 +20,10 @@ tools/gach pull apps/foo/data.ini -             # lấy file về (- = in ra std
 tools/gach ls apps | rm <path> | mkdir <dir> | info | mem | reboot
 tools/gach launch settings | home | back      # điều khiển app từ xa (test tự động)
 tools/gach perf bench                           # đo vẽ lại toàn màn 20 lần (fps, thời gian khung)
+tools/gach help                                 # lệnh theo nhóm; help apps / help heap: chi tiết
+tools/gach app list                             # mọi app + trạng thái; app inspect|stop|kill|disable <id>...
+tools/gach health                               # chấm điểm OK/WARN/BAD: RAM, stack task, CPU, nhiệt độ, thẻ, Wi-Fi, reset
+tools/gach top                                  # %CPU từng task, làm mới mỗi giây (Ctrl-C)
 # trong gach shell: uidiag – trạng thái task UI không cần khóa (vòng lặp, phase, đứng bao lâu) khi nghi UI treo
 ```
 

@@ -136,6 +136,19 @@ Trong shell, `install <file>`, `push <local> <remote>`, `pull <remote> [local]` 
 | `push <local> <remote>` / `pull <remote> [local\|-]` | Chép file lên / về |
 | `reboot` | Khởi động lại board |
 | `launch <app_id>` / `home` / `back` | Mở app / về màn hình chính / quay lại (điều khiển từ xa, test tự động) |
+| `help [nhóm\|lệnh]` | Lệnh theo nhóm: system, memory, tasks, apps, files, logs, ui, legacy. `help apps` = cú pháp + mô tả từng lệnh của nhóm; `[pc]` = lệnh chạy phía máy tính |
+| `app list` / `app info <id>` / `app inspect <id>` / `app status` | Mọi app (loại builtin / system / script, phiên bản, đang chạy / nền / dừng, bật / tắt) / metadata / thêm tài nguyên đang dùng (RAM Lua, widget, timer, file của app) / app foreground, back stack, máy ảo Lua |
+| `app launch\|stop\|restart <id>` / `app kill <id>` | Mở / đóng / mở lại app / buộc đóng app Lua mà KHÔNG chạy code của nó (app treo, lỗi) |
+| `app enable\|disable <id>` | Ẩn app khỏi launcher và chặn mở (giữ sau khi khởi động lại; không tắt được Home / Settings / Apps) |
+| `app install <file.gapp>` / `app uninstall <id>` | Cài gói từ máy tính (hoặc đường dẫn trên thẻ) / gỡ app + dữ liệu (đang mở thì đóng trước) |
+| `app permissions <id>` / `app logs <id> [n]` | Quyền của app / n dòng log cuối liên quan tới app (mặc định 40) |
+| `sysinfo` / `version` | Chip, revision, MAC, flash/PSRAM, thiết bị / phiên bản firmware, ESP-IDF, LVGL, SDK app |
+| `uptime` / `resetinfo` / `bootinfo` | Thời gian chạy, số lần khởi động (giữ qua reset mềm), lý do reset (+ gợi ý khi crash / watchdog / brownout), phân vùng đang chạy |
+| `cpuinfo` / `coreinfo` | Kiến trúc, tần số, tải từng core, task ghim vào core nào |
+| `meminfo` / `heap` / `memmap` | Tóm tắt bộ nhớ / từng vùng heap (khối dùng, khối trống, phân mảnh) / heap + arena Lua + bảng phân vùng flash |
+| `ps` / `top [rows]` / `taskinfo <tên\|id>` / `stack` | Danh sách task (trạng thái, priority, core, stack trống thấp nhất, %CPU) / %CPU trong 1 s, làm mới liên tục / chi tiết một task / stack tăng dần (cảnh báo dưới 512 B) |
+| `heap trace start [n]` / `stop` / `dump [n]` / `heap trace` | Ghi các khối heap được cấp mà chưa giải phóng (tìm rò rỉ): địa chỉ, kích thước. Nơi gọi (4 cấp, giải bằng `addr2line`) chỉ có khi build bật frame pointer – xem `sdkconfig.defaults` của board (tốn ~15 KB RAM nội, chậm ~8 %) |
+| `stats` / `health` | Tổng hợp một màn / chấm điểm sức khỏe thiết bị (OK, INFO, WARN, BAD) |
 | `perf [reset\|bench]` | Hiệu năng vẽ: fps, thời gian khung, phần flush. `bench` = vẽ lại toàn màn 20 lần, in trung bình |
 
 ### 4.4 Log hoạt động thế nào

@@ -1,6 +1,8 @@
 # L4.5 Runtime: app cài thêm (gói .gapp) chạy trên máy ảo Lua, cung cấp gach SDK.
 # Phụ thuộc: framework + HAL contract (filesystem) + OSAL + LVGL + Lua. Không SDK chip.
 idf_component_register(SRCS "src/arena_allocator.cpp"
+                            "src/bridge_app.cpp"
+                            "src/bridge_sys.cpp"
                             "src/debug_bridge.cpp"
                             "src/fs_utils.cpp"
                             "src/log_history.cpp"

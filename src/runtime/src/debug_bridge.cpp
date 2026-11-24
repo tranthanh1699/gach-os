@@ -13,6 +13,7 @@
 #include <cstring>
 
 #include "common/string_utils.hpp"
+#include "bridge_sys.hpp"
 #include "common/log.hpp"
 #include "frame_codec.hpp"
 #include "log_history.hpp"
@@ -167,13 +168,155 @@ const char* fs_path(const char* p_path)
 // ============================================================================
 // Lệnh
 // ============================================================================
-void cmd_help(uint8_t id)
+// ---- help ----
+struct HelpEntry {
+    const char* p_group;
+    const char* p_usage;
+    const char* p_text;
+};
+
+// Một nguồn cho mọi lệnh (cả lệnh chạy phía máy tính trong `gach shell`, đánh dấu [pc]).
+const HelpEntry HELP[] = {
+    {"system", "sysinfo", "chip, revision, MAC, memory sizes, devices"},
+    {"system", "version", "firmware, chip SDK, LVGL, app SDK versions"},
+    {"system", "uptime", "time since boot, boot count, last reset"},
+    {"system", "cpuinfo", "architecture, cores, clock, load per core"},
+    {"system", "coreinfo", "per-core load, pinned tasks, running task"},
+    {"system", "resetinfo", "why the device last restarted (+ hints)"},
+    {"system", "bootinfo", "boot count, reset reason, running partition"},
+    {"system", "stats", "one-screen summary: cpu, memory, display, temp, sd, wifi"},
+    {"system", "health", "grade the device: OK / INFO / WARN / BAD per check"},
+    {"system", "reboot", "restart the device"},
+    {"memory", "meminfo", "internal RAM, PSRAM and UI heap summary"},
+    {"memory", "heap", "every heap region: free, min, largest block, blocks"},
+    {"memory", "heap trace start [n]", "record allocations not yet freed (leak hunting)"},
+    {"memory", "heap trace stop|dump [n]|status", "stop recording / list live blocks / summary"},
+    {"memory", "memmap", "heap regions, Lua arena, flash partitions"},
+    {"tasks", "ps", "all RTOS tasks: state, priority, core, stack, cpu"},
+    {"tasks", "top [rows]", "cpu % per task over 1 s (live in gach shell, Ctrl-C)"},
+    {"tasks", "taskinfo <name|id>", "details of one task"},
+    {"tasks", "stack", "tasks sorted by lowest free stack"},
+    {"apps", "app list", "every app: type, version, state, enabled"},
+    {"apps", "app info <id>", "manifest / metadata of one app"},
+    {"apps", "app inspect <id>", "info + live resources (Lua memory, widgets, files)"},
+    {"apps", "app status", "foreground app, back stack, script VM"},
+    {"apps", "app launch|stop|restart <id>", "open / close / reopen an app"},
+    {"apps", "app kill <id>", "force-close a script app without running its code"},
+    {"apps", "app enable|disable <id>", "show / hide an app (kept after reboot)"},
+    {"apps", "app install [file.gapp]", "[pc] push + install a package (no arg: install /install)"},
+    {"apps", "app uninstall <id>", "remove an installed app and its data"},
+    {"apps", "app permissions <id>", "what the app is allowed to use"},
+    {"apps", "app logs <id> [n]", "last n log lines of an app (default 40)"},
+    {"files", "ls [dir] | mkdir <dir> | rm <path>", "SD card files (paths relative to the card root)"},
+    {"files", "push <local> <remote>", "[pc] copy a file to the card"},
+    {"files", "pull <remote> [local|-]", "[pc] copy a file from the card"},
+    {"logs", "logcat [-f]", "[pc] log history then live log (-f: live only)"},
+    {"logs", "dmesg", "log history (32 KB, from boot)"},
+    {"logs", "loglevel [tag] [e|w|i|d|v|n]", "show / change log levels"},
+    {"ui", "home | back", "press Home / Back"},
+    {"ui", "perf [reset|bench]", "redraw statistics / full-screen redraw benchmark"},
+    {"ui", "uidiag", "UI task state (works even when the UI hangs)"},
+    {"legacy", "info | mem | apps | launch <id> | install | uninstall <id>", "older short forms"},
+};
+const char* const HELP_GROUPS[] = {"system", "memory", "tasks", "apps", "files", "logs", "ui", "legacy"};
+
+/** @brief Từ thứ index (0-based) của chuỗi, phân cách bởi dấu cách; "" nếu không có. */
+void nth_word(const char* p_text, size_t index, char* p_out, size_t out_len)
 {
-    send_text(id, "info | mem | apps | ls [dir] | mkdir <dir> | rm <path>");
-    send_text(id, "push <path> <size> | pull <path> | install | uninstall <id> | reboot");
-    send_text(id, "launch <app_id> | back | home | perf [reset|bench] | uidiag");
-    send_text(id, "dmesg | loglevel [tag] [n|e|w|i|d|v]");
-    send_resp(id, true, nullptr);
+    p_out[0] = '\0';
+    size_t word = 0U;
+    while (*p_text != '\0') {
+        while (*p_text == ' ') {
+            ++p_text;
+        }
+        const char* const p_start = p_text;
+        while ((*p_text != ' ') && (*p_text != '\0')) {
+            ++p_text;
+        }
+        if ((word++ == index) && (p_text > p_start)) {
+            const auto len = static_cast<size_t>(p_text - p_start);
+            (void)std::snprintf(p_out, out_len, "%.*s", static_cast<int>(len), p_start);
+            return;
+        }
+    }
+}
+
+/**
+ * @brief Một dòng tổng quan của nhóm: tên các lệnh (mỗi phương án "a | b" một tên). Nhóm mà mọi lệnh cùng tiền tố
+ *        (VD "app ...") thì hiện "app list|info|...".
+ */
+void help_overview_line(uint8_t id, const char* p_group)
+{
+    constexpr size_t WORD_LEN = 24U;
+    char first[WORD_LEN] = {};
+    bool is_family = true;
+    size_t entries = 0U;
+    for (const HelpEntry& entry : HELP) {
+        if (std::strcmp(entry.p_group, p_group) != 0) {
+            continue;
+        }
+        char word[WORD_LEN];
+        nth_word(entry.p_usage, 0U, word, sizeof(word));
+        ++entries;
+        if (first[0] == '\0') {
+            (void)std::snprintf(first, sizeof(first), "%s", word);
+        } else if (std::strcmp(first, word) != 0) {
+            is_family = false;
+        }
+    }
+    is_family = is_family && (entries >= 2U); // "Cùng tiền tố" chỉ có nghĩa khi nhóm có nhiều lệnh.
+    char text[TEXT_BUF_LEN];
+    int used = std::snprintf(text, sizeof(text), "  %-7s %s", p_group, is_family ? first : "");
+    const char* p_sep = is_family ? " " : "";
+    for (const HelpEntry& entry : HELP) {
+        if (std::strcmp(entry.p_group, p_group) != 0) {
+            continue;
+        }
+        // Mỗi phương án "a ... | b ..." -> tên lệnh (hoặc lệnh con nếu là nhóm cùng tiền tố).
+        const char* p_alt = entry.p_usage;
+        while ((p_alt != nullptr) && (used > 0) && (static_cast<size_t>(used) < sizeof(text))) {
+            char word[WORD_LEN];
+            nth_word(p_alt, is_family ? 1U : 0U, word, sizeof(word));
+            char padded[WORD_LEN + 2U];
+            (void)std::snprintf(padded, sizeof(padded), " %s ", word);
+            char haystack[TEXT_BUF_LEN + 2U];
+            (void)std::snprintf(haystack, sizeof(haystack), "%s ", &text[9]); // Bỏ nhãn nhóm khi so trùng.
+            for (char* p = haystack; *p != '\0'; ++p) {
+                *p = (*p == '|') ? ' ' : *p;
+            }
+            if ((word[0] != '\0') && (std::strstr(haystack, padded) == nullptr)) {
+                used += std::snprintf(&text[used], sizeof(text) - static_cast<size_t>(used), "%s%s", p_sep, word);
+                p_sep = is_family ? "|" : " ";
+            }
+            const char* const p_next = std::strstr(p_alt, " | ");
+            p_alt = (p_next != nullptr) ? (p_next + 3) : nullptr;
+        }
+    }
+    send_text(id, text);
+}
+
+void cmd_help(uint8_t id, const char* p_topic)
+{
+    char text[TEXT_BUF_LEN];
+    if (p_topic == nullptr) {
+        send_text(id, "gach shell - type `help <group>` or `help <command>` for details");
+        for (const char* const p_group : HELP_GROUPS) {
+            help_overview_line(id, p_group);
+        }
+        send_resp(id, true, "[pc] = runs on the computer side of `gach shell`");
+        return;
+    }
+    size_t shown = 0U;
+    for (const HelpEntry& entry : HELP) {
+        const bool group_match = std::strcmp(entry.p_group, p_topic) == 0;
+        const bool cmd_match = std::strncmp(entry.p_usage, p_topic, std::strlen(p_topic)) == 0;
+        if (group_match || cmd_match) {
+            (void)std::snprintf(text, sizeof(text), "  %-38s %s", entry.p_usage, entry.p_text);
+            send_text(id, text);
+            ++shown;
+        }
+    }
+    send_resp(id, shown > 0U, (shown > 0U) ? nullptr : "no such group / command (type help)");
 }
 
 void cmd_info(uint8_t id)
@@ -443,37 +586,9 @@ void cmd_uninstall(uint8_t id, const char* p_id)
 /** @brief In lại lịch sử log (từng dòng một khung TEXT). */
 void cmd_dmesg(uint8_t id)
 {
-    constexpr size_t CHUNK = MAX_DATA; // >= dòng log dài nhất (256 B kể cả '\n'): mỗi dòng đi trọn một khung.
-    char chunk[CHUNK + 1U];
-    uint32_t pos = 0U;
-    const uint32_t end = log_history::total(); // Log phát sinh trong lúc gửi không làm vòng lặp kéo dài mãi.
-    while (pos < end) {
-        const uint32_t chunk_pos = pos;
-        const size_t count = log_history::read(pos, chunk, CHUNK);
-        if (count == 0U) {
-            break;
-        }
-        size_t start = 0U;
-        for (size_t index = 0U; index < count; ++index) {
-            if (chunk[index] == '\n') {
-                chunk[index] = '\0';
-                send_text(id, &chunk[start]);
-                start = index + 1U;
-            }
-        }
-        const bool is_tail = start < count;
-        if (is_tail && (start == 0U) && (count == CHUNK)) {
-            chunk[count] = '\0';
-            send_text(id, chunk); // Dòng dài hơn một khối: gửi từng khúc.
-        } else if (is_tail && (pos < end)) {
-            pos = chunk_pos + static_cast<uint32_t>(start); // Đọc lại dòng dở ở lượt sau cho trọn.
-        } else if (is_tail) {
-            chunk[count] = '\0';
-            send_text(id, &chunk[start]); // Dòng cuối chưa có '\n'.
-        } else {
-            // Khối kết thúc đúng ở '\n'.
-        }
-    }
+    bridge_for_each_log_line([](const char* p_line, void* p_ctx) {
+        send_text(*static_cast<uint8_t*>(p_ctx), p_line);
+    }, &id);
     send_resp(id, true, nullptr);
 }
 
@@ -511,12 +626,9 @@ void cmd_loglevel(uint8_t id, const char* p_arg1, const char* p_arg2)
 // Mở/đóng app chạy on_create/on_resume/on_back của app (máy ảo Lua, dựng UI, layout LVGL): sâu hơn nhiều so với
 // stack 6 KiB của bridge (đã gặp tràn stack khi launch). Bridge chỉ hẹn một lv_timer chạy một lần trên task UI
 // rồi chờ cờ hoàn tất (đọc dưới UiLock, cùng cách với perf bench).
-enum class UiOp : uint8_t { LAUNCH, HOME, BACK };
-
 struct UiJob {
-    UiOp op;
-    char app_id[runtime::PACKAGE_ID_BUF_LEN];
-    common::Status status;
+    UiFn fn;
+    void* p_ctx;
     bool is_done;
 };
 
@@ -525,41 +637,14 @@ UiJob s_ui_job;
 void ui_job_cb(lv_timer_t* p_timer)
 {
     (void)p_timer;
-    fw::AppManager& apps = fw::app_manager();
-    s_ui_job.status = common::Status::OK;
-    if (s_ui_job.op == UiOp::LAUNCH) {
-        s_ui_job.status = apps.launch(s_ui_job.app_id);
-    } else if (s_ui_job.op == UiOp::HOME) {
-        apps.home();
-    } else {
-        apps.back();
-    }
+    s_ui_job.fn(s_ui_job.p_ctx);
     s_ui_job.is_done = true;
 }
 
-/** @return false nếu task UI không xử lý kịp (UI treo). */
-bool run_on_ui(UiOp op, const char* p_app, common::Status& status)
-{
-    constexpr uint32_t POLL_MS = 20U;
-    constexpr uint32_t TIMEOUT_MS = 5000U;
-    {
-        fw::UiLock lock;
-        s_ui_job.op = op;
-        (void)common::copy_string(s_ui_job.app_id, sizeof(s_ui_job.app_id), (p_app != nullptr) ? p_app : "");
-        s_ui_job.is_done = false;
-        lv_timer_t* const p_timer = lv_timer_create(&ui_job_cb, 0U, nullptr);
-        lv_timer_set_repeat_count(p_timer, 1); // Một lần rồi tự xóa.
-    }
-    for (uint32_t waited = 0U; waited < TIMEOUT_MS; waited += POLL_MS) {
-        osal::delay_ms(POLL_MS);
-        fw::UiLock lock;
-        if (s_ui_job.is_done) {
-            status = s_ui_job.status;
-            return true;
-        }
-    }
-    return false;
-}
+struct LaunchCtx {
+    const char* p_app;
+    common::Status status;
+};
 
 void cmd_launch(uint8_t id, const char* p_app)
 {
@@ -567,18 +652,21 @@ void cmd_launch(uint8_t id, const char* p_app)
         send_resp(id, false, "usage: launch <app_id>");
         return;
     }
-    common::Status status = common::Status::OK;
-    if (!run_on_ui(UiOp::LAUNCH, p_app, status)) {
+    LaunchCtx ctx{p_app, common::Status::OK};
+    if (!bridge_run_on_ui([](void* p) {
+            auto* const p_job = static_cast<LaunchCtx*>(p);
+            p_job->status = fw::app_manager().launch(p_job->p_app);
+        }, &ctx)) {
         send_resp(id, false, "ui busy (timeout)");
         return;
     }
-    send_resp(id, common::is_ok(status), common::is_ok(status) ? nullptr : "no such app");
+    send_resp(id, common::is_ok(ctx.status), common::is_ok(ctx.status) ? nullptr : "no such app (or disabled)");
 }
 
 void cmd_navigate(uint8_t id, bool is_home)
 {
-    common::Status status = common::Status::OK;
-    const bool is_ok = run_on_ui(is_home ? UiOp::HOME : UiOp::BACK, nullptr, status);
+    const bool is_ok = is_home ? bridge_run_on_ui([](void*) { fw::app_manager().home(); }, nullptr)
+                               : bridge_run_on_ui([](void*) { fw::app_manager().back(); }, nullptr);
     send_resp(id, is_ok, is_ok ? nullptr : "ui busy (timeout)");
 }
 
@@ -666,7 +754,7 @@ void on_command(const Frame& frame)
     const uint8_t id = frame.id;
 
     if ((std::strcmp(p_cmd, "help") == 0) || (p_cmd[0] == '\0')) {
-        cmd_help(id);
+        cmd_help(id, p_arg1);
     } else if (std::strcmp(p_cmd, "info") == 0) {
         cmd_info(id);
     } else if (std::strcmp(p_cmd, "mem") == 0) {
@@ -707,6 +795,10 @@ void on_command(const Frame& frame)
         send_resp(id, true, "rebooting");
         osal::delay_ms(REBOOT_DELAY_MS);
         s_p_devices->p_system->restart();
+    } else if (bridge_app_command(id, argc, args, *s_p_devices)) {
+        // Lệnh `app ...` (bridge_app.cpp).
+    } else if (bridge_sys_command(id, argc, args, *s_p_devices)) {
+        // Lệnh introspection (bridge_sys.cpp).
     } else {
         send_resp(id, false, "unknown command (try: help)");
     }
@@ -817,6 +909,71 @@ common::Status bridge_start(const hal::Devices& devices)
                                &bridge_task, nullptr);
     s_is_running = common::is_ok(status);
     return status;
+}
+
+bool bridge_run_on_ui(UiFn fn, void* p_ctx)
+{
+    constexpr uint32_t POLL_MS = 20U;
+    constexpr uint32_t TIMEOUT_MS = 5000U;
+    {
+        fw::UiLock lock;
+        s_ui_job = UiJob{fn, p_ctx, false};
+        lv_timer_t* const p_timer = lv_timer_create(&ui_job_cb, 0U, nullptr);
+        lv_timer_set_repeat_count(p_timer, 1); // Một lần rồi tự xóa.
+    }
+    for (uint32_t waited = 0U; waited < TIMEOUT_MS; waited += POLL_MS) {
+        osal::delay_ms(POLL_MS);
+        fw::UiLock lock;
+        if (s_ui_job.is_done) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void bridge_for_each_log_line(LineFn fn, void* p_ctx)
+{
+    constexpr size_t CHUNK = MAX_DATA; // >= dòng log dài nhất (256 B kể cả '\n'): mỗi dòng đi trọn một lần gọi.
+    char chunk[CHUNK + 1U];
+    uint32_t pos = 0U;
+    const uint32_t end = log_history::total(); // Log phát sinh trong lúc duyệt không làm vòng lặp kéo dài mãi.
+    while (pos < end) {
+        const uint32_t chunk_pos = pos;
+        const size_t count = log_history::read(pos, chunk, CHUNK);
+        if (count == 0U) {
+            break;
+        }
+        size_t start = 0U;
+        for (size_t index = 0U; index < count; ++index) {
+            if (chunk[index] == '\n') {
+                chunk[index] = '\0';
+                fn(&chunk[start], p_ctx);
+                start = index + 1U;
+            }
+        }
+        const bool is_tail = start < count;
+        if (is_tail && (start == 0U) && (count == CHUNK)) {
+            chunk[count] = '\0';
+            fn(chunk, p_ctx); // Dòng dài hơn một khối: từng khúc.
+        } else if (is_tail && (pos < end)) {
+            pos = chunk_pos + static_cast<uint32_t>(start); // Đọc lại dòng dở ở lượt sau cho trọn.
+        } else if (is_tail) {
+            chunk[count] = '\0';
+            fn(&chunk[start], p_ctx); // Dòng cuối chưa có '\n'.
+        } else {
+            // Khối kết thúc đúng ở '\n'.
+        }
+    }
+}
+
+void bridge_text(uint8_t id, const char* p_text)
+{
+    send_text(id, p_text);
+}
+
+void bridge_resp(uint8_t id, bool is_ok, const char* p_text)
+{
+    send_resp(id, is_ok, p_text);
 }
 
 void log_history_append(const char* p_text, size_t len)

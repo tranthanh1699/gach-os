@@ -110,6 +110,13 @@ public:
      */
     void system_stats(SystemStats& stats) const;
 
+    /**
+     * @brief [Nội bộ framework] Đọc / ghi một thiết lập hệ thống dạng chuỗi (lưu bền, VD NVS).
+     * @return ERR_NOT_SUPPORTED nếu board không có bộ lưu.
+     */
+    common::Status load_setting(const char* p_key, char* p_buf, size_t buf_len) const;
+    common::Status save_setting(const char* p_key, const char* p_value);
+
     /** @return Thời gian từ lúc khởi động (ms). */
     uint32_t uptime_ms() const;
 

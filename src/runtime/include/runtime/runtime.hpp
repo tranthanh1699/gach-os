@@ -32,6 +32,45 @@ struct PackageView {
     const char* p_version;
 };
 
+/** @brief Chi tiết manifest của một gói đã cài. */
+struct PackageDetails {
+    const char* p_id;
+    const char* p_name;
+    const char* p_version;
+    const char* p_entry;
+    const char* p_icon;
+    uint8_t sdk;
+    bool can_storage; /**< permissions=storage */
+    bool can_network; /**< permissions=network */
+};
+
+/** @brief Trạng thái máy ảo Lua (một app script chạy tại một thời điểm). */
+struct ScriptStats {
+    bool is_running;      /**< Có app script đang mở. */
+    const char* p_app_id; /**< Id app đang chạy ("" nếu không có). */
+    bool is_faulted;      /**< App đang hiện màn hình lỗi. */
+    const char* p_error;  /**< Lỗi gần nhất của app ("" nếu không có). */
+    size_t mem_used;      /**< Byte arena Lua đang dùng. */
+    size_t mem_peak;
+    size_t mem_capacity;
+    size_t widgets;       /**< Widget app đã tạo còn sống. */
+    size_t timers;
+    size_t handlers;      /**< Callback gach.ui.on. */
+};
+
+/** @return true nếu id là gói đã cài; điền details (chuỗi trỏ vào bộ nhớ runtime, dùng ngay). */
+bool package_details(const char* p_id, PackageDetails& details);
+
+/** @param[out] stats Trạng thái máy ảo Lua hiện tại. */
+void script_stats(ScriptStats& stats);
+
+/**
+ * @brief Đánh dấu app script đang chạy (nếu đúng id) là bị buộc dừng: lần đóng kế tiếp KHÔNG chạy on_pause /
+ *        on_destroy của app (dùng khi app treo / lỗi). Gọi từ UI task, ngay trước AppManager::close().
+ * @return false nếu app đó không phải app script đang chạy.
+ */
+bool script_mark_killed(const char* p_id);
+
 /**
  * @brief Khởi tạo runtime: cài các gói chờ trong install/, đăng ký mọi app trong apps/.
  * @note  Gọi từ entry point của platform, trước fw::start().

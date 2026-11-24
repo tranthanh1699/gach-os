@@ -1592,6 +1592,36 @@ void ScriptHost::stop()
     m_p_root = nullptr;
 }
 
+void ScriptHost::stats(ScriptStats& out) const
+{
+    out = ScriptStats{};
+    out.is_running = (m_p_lua != nullptr);
+    out.p_app_id = running_id();
+    out.is_faulted = m_faulted;
+    out.p_error = m_error;
+    out.mem_used = m_allocator.used();
+    out.mem_peak = m_allocator.peak();
+    out.mem_capacity = m_allocator.capacity();
+    for (size_t index = 0U; index < MAX_OBJECTS; ++index) {
+        out.widgets += (m_objects[index] != nullptr) ? 1U : 0U;
+    }
+    for (const TimerSlot& slot : m_timers) {
+        out.timers += (slot.p_timer != nullptr) ? 1U : 0U;
+    }
+    for (const EventBinding& binding : m_bindings) {
+        out.handlers += ((binding.handle != 0) && (binding.ref != LUA_NOREF)) ? 1U : 0U;
+    }
+}
+
+void ScriptHost::kill()
+{
+    if (m_p_lua != nullptr) {
+        LOGW(m_manifest.id, "killed (lifecycle callbacks skipped)");
+        m_faulted = true; // call_app / invoke bỏ qua; stop() không gọi on_destroy.
+        set_timers_paused(true);
+    }
+}
+
 int32_t ScriptHost::register_object(lv_obj_t* p_obj)
 {
     for (size_t index = 0U; index < MAX_OBJECTS; ++index) {

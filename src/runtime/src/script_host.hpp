@@ -26,6 +26,7 @@
 #include "lua.hpp"
 #include "lvgl.h"
 #include "manifest.hpp"
+#include "runtime/runtime.hpp"
 
 namespace runtime {
 
@@ -59,6 +60,15 @@ public:
     bool back();
     /** @brief Gọi app.on_destroy rồi đóng máy ảo, thu hồi toàn bộ arena. */
     void stop();
+
+    /** @brief Trạng thái máy ảo (gach app status / inspect). */
+    void stats(ScriptStats& out) const;
+
+    /** @brief Buộc dừng: các callback vòng đời của app không được gọi nữa (stop() vẫn dọn máy ảo). */
+    void kill();
+
+    /** @return Id app đang chạy, "" nếu không có. */
+    const char* running_id() const { return (m_p_lua != nullptr) ? m_manifest.id : ""; }
 
 private:
     struct Sdk; // Bindings Lua (định nghĩa trong .cpp, truy cập thành viên private).

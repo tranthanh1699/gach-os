@@ -55,6 +55,30 @@ public:
      */
     common::Status launch(const char* p_id);
 
+    /**
+     * @brief Đóng một app đang mở (ở bất kỳ vị trí nào trong back-stack), gọi on_pause/on_destroy như bình thường.
+     * @return ERR_PARAM (không tồn tại / là home), ERR_STATE (không đang mở).
+     */
+    common::Status close(const char* p_id);
+
+    /**
+     * @brief Bật / tắt app: app bị tắt bị ẩn khỏi launcher và launch() từ chối; lưu qua các lần khởi động.
+     * @return ERR_PARAM (không tồn tại hoặc là app hệ thống không được tắt), ERR_FULL (quá nhiều app bị tắt).
+     */
+    common::Status set_enabled(const char* p_id, bool is_enabled);
+
+    /** @return false nếu app đã bị tắt bằng set_enabled(). */
+    bool is_enabled(const char* p_id) const;
+
+    /** @return true nếu app không được phép tắt (home, Settings, Apps). */
+    bool is_essential(const char* p_id) const;
+
+    /** @return Số app trong back-stack (gồm home). */
+    size_t stack_depth() const { return m_stack_depth; }
+
+    /** @return App ở vị trí index của back-stack (0 = home), NULL nếu ngoài dải. */
+    const App* stack_at(size_t index) const { return (index < m_stack_depth) ? m_stack[index].p_app : nullptr; }
+
     /** @brief Hành vi nút Back: hỏi app foreground, nếu không xử lý thì đóng app. */
     void back();
 
@@ -89,6 +113,11 @@ private:
     void close_other_exclusive(const App& app);
     void resume_top();
     void notify_foreground();
+    void load_disabled();
+    void save_disabled();
+
+    static constexpr size_t MAX_DISABLED = 16U;
+    static constexpr size_t DISABLED_ID_LEN = 32U;
 
     Context m_context;
     App* m_p_apps[config::MAX_APPS];
@@ -99,6 +128,8 @@ private:
     size_t m_stack_depth;
     lv_obj_t* m_p_content;
     IAppListener* m_p_listener;
+    char m_disabled[MAX_DISABLED][DISABLED_ID_LEN];
+    size_t m_disabled_count;
 };
 
 } // namespace fw

@@ -343,6 +343,32 @@ common::Status uninstall(const char* p_id)
     return status;
 }
 
+bool package_details(const char* p_id, PackageDetails& details)
+{
+    ScriptApp* const p_slot = find_slot(p_id);
+    if (p_slot == nullptr) {
+        return false;
+    }
+    const Manifest& m = p_slot->manifest();
+    details = PackageDetails{m.id, m.name, m.version, m.entry, m.icon, m.sdk,
+                             (m.permissions & PERMISSION_STORAGE) != 0U, (m.permissions & PERMISSION_NETWORK) != 0U};
+    return true;
+}
+
+void script_stats(ScriptStats& stats)
+{
+    s_host.stats(stats);
+}
+
+bool script_mark_killed(const char* p_id)
+{
+    if ((p_id == nullptr) || (std::strcmp(s_host.running_id(), p_id) != 0)) {
+        return false;
+    }
+    s_host.kill();
+    return true;
+}
+
 const char* last_error()
 {
     return s_error;

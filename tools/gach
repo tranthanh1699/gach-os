@@ -6,6 +6,12 @@
   tools/gach install app.gapp [...]   Đẩy gói vào /install rồi cài ngay (không cần rút thẻ SD)
   tools/gach uninstall <id>           Gỡ app
   tools/gach logcat [-f]              Log từ lúc boot rồi theo dõi tiếp như adb (-f: chỉ log mới; Ctrl-C để thoát)
+  tools/gach help [group|command]     Lệnh của board theo nhóm (system, memory, tasks, apps, files, logs, ui)
+  tools/gach app list | info <id> | inspect <id> | status | launch|stop|restart|kill <id>
+  tools/gach app enable|disable <id> | install <file.gapp> | uninstall <id> | permissions <id> | logs <id> [n]
+  tools/gach sysinfo | version | uptime | cpuinfo | coreinfo | meminfo | memmap | stats | health
+  tools/gach ps | top [rows] | taskinfo <name|id> | stack | resetinfo | bootinfo
+  tools/gach heap [trace start [n] | trace stop | trace dump [n] | trace]
   tools/gach dmesg                    In lại lịch sử log (32 KiB gần nhất, kể cả log lúc khởi động)
   tools/gach loglevel [tag] [e|w|i|d|v|n]   Xem / đổi mức log toàn cục hoặc theo tag
   tools/gach shell                    Shell tương tác (gõ help)
@@ -322,9 +328,17 @@ def do_logcat(link: Link, follow_only: bool = False) -> int:
         return 0
 
 
+def local_packages(args: list[str]) -> list[str] | None:
+    """`app install a.gapp b.gapp`: trả danh sách file .gapp có trên máy tính, None nếu không phải trường hợp đó
+    (VD đường dẫn trên thẻ SD -> để board xử lý)."""
+    if len(args) < 2 or args[0] != "install":
+        return None
+    files = args[1:]
+    return files if all(Path(f).is_file() for f in files) else None
+
+
 def do_shell(link: Link) -> int:
-    print("gach shell – device commands (help) + local: install <file.gapp>, push <local> <remote>, "
-          "pull <remote> [local], logcat [-f], exit", file=sys.stderr)
+    print("gach shell - type `help` for commands, `help <group>` for details, `exit` to quit", file=sys.stderr)
     while True:
         try:
             line = input("gach> ").strip()
@@ -338,11 +352,15 @@ def do_shell(link: Link) -> int:
             return 0
         if parts[0] == "install" and len(parts) > 1:
             do_install(link, parts[1:])
+        elif parts[0] == "app" and local_packages(parts[1:]) is not None:
+            do_install(link, local_packages(parts[1:]))
         elif parts[0] == "push" and len(parts) == 3:
             ok, msg = link.push(Path(parts[1]), parts[2])
             print(msg if ok else f"error: {msg}")
         elif parts[0] == "pull" and len(parts) in (2, 3):
             do_pull(link, parts[1], parts[2] if len(parts) == 3 else None)
+        elif parts[0] == "top":
+            do_top(link, parts[1] if len(parts) > 1 else "")
         elif parts[0] == "logcat":
             do_logcat(link, follow_only=("-f" in parts[1:]))
             link.log_sink = None
@@ -362,6 +380,26 @@ def do_pull(link: Link, remote: str, local: str | None) -> int:
     return 0 if ok else 1
 
 
+SYS_COMMANDS = ("sysinfo", "version", "uptime", "cpuinfo", "coreinfo", "meminfo", "memmap", "ps", "stack",
+                "resetinfo", "bootinfo", "stats", "health")
+
+
+def do_top(link: Link, rows: str = "") -> int:
+    """Như `top`: board lấy mẫu 1 s mỗi lần; xóa màn hình rồi in lại tới khi Ctrl-C."""
+    line = f"top {rows}".strip()
+    try:
+        while True:
+            lines: list[str] = []
+            ok, msg = link.command(line, on_text=lines.append, timeout=RESP_TIMEOUT_S + 2)
+            if not ok:
+                print(f"error: {msg}", file=sys.stderr)
+                return 1
+            sys.stdout.write("\033[H\033[2J" + "\n".join(lines) + "\n\n(Ctrl-C to quit)\n")
+            sys.stdout.flush()
+    except KeyboardInterrupt:
+        return 0
+
+
 LOG_LEVELS = {"n", "none", "e", "error", "w", "warn", "i", "info", "d", "debug", "v", "verbose"}
 
 
@@ -376,8 +414,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(prog="gach", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("-p", "--port", default=os.environ.get("GACH_PORT", "/dev/ttyUSB0"))
     sub = parser.add_subparsers(dest="cmd", required=True)
-    for name in ("info", "mem", "apps", "reboot", "shell", "devices", "home", "back", "dmesg"):
+    for name in ("info", "mem", "apps", "reboot", "shell", "devices", "home", "back", "dmesg", *SYS_COMMANDS):
         sub.add_parser(name)
+    sub.add_parser("top", help="task CPU realtime (Ctrl-C để thoát)").add_argument("rows", nargs="?", default="")
+    sub.add_parser("help", help="lệnh của board: help [nhóm|lệnh]").add_argument("topic", nargs="?", default="")
+    app = sub.add_parser("app", help="quản lý app: app list|info|inspect|status|launch|stop|restart|kill|enable|"
+                                      "disable|install|uninstall|permissions|logs")
+    app.add_argument("args", nargs="*")
+    sub.add_parser("taskinfo").add_argument("task")
+    heap = sub.add_parser("heap", help="vùng heap; heap trace start [n] | stop | dump [n] | status")
+    heap.add_argument("args", nargs="*")
     sub.add_parser("logcat", help="lịch sử log rồi theo dõi tiếp (-f: chỉ log mới)").add_argument(
         "-f", "--follow", action="store_true", help="bỏ qua lịch sử, chỉ in log mới")
     loglevel = sub.add_parser("loglevel", help="xem / đổi mức log: loglevel [tag] [n|e|w|i|d|v]")
@@ -402,8 +448,21 @@ def main() -> int:
         if args.cmd == "devices":
             print(f"{args.port}\t{link.connect()}")
             return 0
-        if args.cmd in ("info", "mem", "apps", "reboot", "home", "back", "dmesg"):
+        if args.cmd in ("info", "mem", "apps", "reboot", "home", "back", "dmesg", *SYS_COMMANDS):
             return run_simple(link, args.cmd)
+        if args.cmd == "top":
+            return do_top(link, args.rows)
+        if args.cmd == "help":
+            return run_simple(link, f"help {args.topic}".strip())
+        if args.cmd == "app":
+            files = local_packages(args.args)
+            if files is not None:
+                return do_install(link, files)
+            return run_simple(link, " ".join(["app", *args.args]))
+        if args.cmd == "taskinfo":
+            return run_simple(link, f"taskinfo {args.task}")
+        if args.cmd == "heap":
+            return run_simple(link, " ".join(["heap", *args.args]))
         if args.cmd == "loglevel":
             line = loglevel_command(args.args)
             if line is None:

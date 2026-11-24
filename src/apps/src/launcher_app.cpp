@@ -156,7 +156,7 @@ void LauncherApp::build_pages()
     m_visible_count = 0U;
     for (size_t index = 0U; index < apps.count(); ++index) {
         fw::App* const p_app = apps.at(index);
-        if ((p_app != nullptr) && p_app->info().show_in_launcher) {
+        if ((p_app != nullptr) && p_app->info().show_in_launcher && apps.is_enabled(p_app->info().p_id)) {
             m_visible[m_visible_count++] = p_app;
         }
     }

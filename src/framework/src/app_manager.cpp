@@ -7,6 +7,9 @@
 #include <cstring>
 
 #include "common/log.hpp"
+#include "common/string_utils.hpp"
+#include "framework/services.hpp"
+#include "storage_keys.hpp"
 #include "osal/osal.hpp"
 
 namespace fw {
@@ -19,7 +22,7 @@ constexpr uint32_t US_PER_MS = 1000U;
 AppManager::AppManager(Services& services)
     : m_context{*this, services}, m_p_apps{}, m_app_count(0U), m_registry_generation(0U), m_p_home(nullptr),
       m_stack{}, m_stack_depth(0U),
-      m_p_content(nullptr), m_p_listener(nullptr)
+      m_p_content(nullptr), m_p_listener(nullptr), m_disabled{}, m_disabled_count(0U)
 {
 }
 
@@ -70,6 +73,10 @@ common::Status AppManager::set_home(const char* p_id)
         LOGW(TAG, "launch: no app '%s'", (p_id != nullptr) ? p_id : "(null)");
         return common::Status::ERR_PARAM;
     }
+    if (!is_enabled(p_id)) {
+        LOGW(TAG, "launch: app '%s' is disabled", p_id);
+        return common::Status::ERR_STATE;
+    }
     m_p_home = p_app;
     return common::Status::OK;
 }
@@ -84,6 +91,7 @@ common::Status AppManager::start(lv_obj_t* p_content, IAppListener* p_listener)
     }
     m_p_content = p_content;
     m_p_listener = p_listener;
+    load_disabled(); // Dịch vụ đã gắn thiết bị: đọc được NVS.
     return push(*m_p_home);
 }
 
@@ -132,6 +140,113 @@ void AppManager::close_other_exclusive(const App& app)
         // Đỉnh mới đang paused: resume để push() pause lại đúng vòng đời (không pause hai lần).
         resume_top();
     }
+}
+
+common::Status AppManager::close(const char* p_id)
+{
+    const App* const p_app = find(p_id);
+    if ((p_app == nullptr) || (p_app == m_p_home)) {
+        return common::Status::ERR_PARAM;
+    }
+    for (size_t index = 1U; index < m_stack_depth; ++index) {
+        if (m_stack[index].p_app != p_app) {
+            continue;
+        }
+        const bool is_top = (index + 1U) == m_stack_depth;
+        remove_at(index);
+        if (is_top) {
+            resume_top();
+        }
+        return common::Status::OK;
+    }
+    return common::Status::ERR_STATE;
+}
+
+bool AppManager::is_essential(const char* p_id) const
+{
+    static const char* const ESSENTIAL[] = {"settings", "apps"}; // Cần để bật lại / quản lý app.
+    if ((p_id == nullptr) || ((m_p_home != nullptr) && (std::strcmp(p_id, m_p_home->info().p_id) == 0))) {
+        return true;
+    }
+    for (const char* const p_name : ESSENTIAL) {
+        if (std::strcmp(p_id, p_name) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool AppManager::is_enabled(const char* p_id) const
+{
+    if (p_id == nullptr) {
+        return false;
+    }
+    for (size_t index = 0U; index < m_disabled_count; ++index) {
+        if (std::strcmp(m_disabled[index], p_id) == 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+common::Status AppManager::set_enabled(const char* p_id, bool is_enabled_now)
+{
+    if ((find(p_id) == nullptr) || is_essential(p_id)) {
+        return common::Status::ERR_PARAM;
+    }
+    if (is_enabled_now == is_enabled(p_id)) {
+        return common::Status::OK;
+    }
+    if (is_enabled_now) {
+        for (size_t index = 0U; index < m_disabled_count; ++index) {
+            if (std::strcmp(m_disabled[index], p_id) == 0) {
+                (void)common::copy_string(m_disabled[index], DISABLED_ID_LEN, m_disabled[m_disabled_count - 1U]);
+                --m_disabled_count;
+                break;
+            }
+        }
+    } else {
+        if (m_disabled_count >= MAX_DISABLED) {
+            return common::Status::ERR_FULL;
+        }
+        (void)common::copy_string(m_disabled[m_disabled_count++], DISABLED_ID_LEN, p_id);
+        (void)close(p_id); // Đang mở thì đóng luôn.
+    }
+    ++m_registry_generation; // Launcher dựng lại lưới (ẩn / hiện icon).
+    save_disabled();
+    LOGI(TAG, "%s %s", is_enabled_now ? "enable" : "disable", p_id);
+    return common::Status::OK;
+}
+
+void AppManager::load_disabled()
+{
+    char list[MAX_DISABLED * DISABLED_ID_LEN] = {};
+    m_disabled_count = 0U;
+    if (!common::is_ok(m_context.services.load_setting(storage_key::APPS_DISABLED, list, sizeof(list)))) {
+        return;
+    }
+    char* p_item = list;
+    while ((p_item != nullptr) && (*p_item != '\0') && (m_disabled_count < MAX_DISABLED)) {
+        char* const p_comma = std::strchr(p_item, ',');
+        if (p_comma != nullptr) {
+            *p_comma = '\0';
+        }
+        if (*p_item != '\0') {
+            (void)common::copy_string(m_disabled[m_disabled_count++], DISABLED_ID_LEN, p_item);
+        }
+        p_item = (p_comma != nullptr) ? (p_comma + 1) : nullptr;
+    }
+}
+
+void AppManager::save_disabled()
+{
+    char list[MAX_DISABLED * DISABLED_ID_LEN] = {};
+    size_t used = 0U;
+    for (size_t index = 0U; index < m_disabled_count; ++index) {
+        used += common::copy_string(&list[used], sizeof(list) - used, (index > 0U) ? "," : "");
+        used += common::copy_string(&list[used], sizeof(list) - used, m_disabled[index]);
+    }
+    (void)m_context.services.save_setting(storage_key::APPS_DISABLED, list);
 }
 
 void AppManager::back()

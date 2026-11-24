@@ -11,6 +11,7 @@ namespace storage_key {
 constexpr const char* WIFI_SSID = "wifi_ssid";
 constexpr const char* WIFI_PASSWORD = "wifi_pass";
 constexpr const char* UTC_OFFSET_MIN = "tz_offset_min";
+constexpr const char* APPS_DISABLED = "apps_disabled"; /**< Id các app bị tắt, cách nhau dấu phẩy. */
 
 } // namespace storage_key
 } // namespace fw
